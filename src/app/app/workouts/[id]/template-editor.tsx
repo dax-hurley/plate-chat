@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useMemo, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,14 +17,9 @@ import {
   resolveTemplateItemWeightUnit,
 } from "@/lib/weight-units";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  type ComboboxOption,
+  AutocompleteCombobox,
+} from "@/components/ui/autocomplete-combobox";
 
 import { actionAddTemplateItem, actionRemoveTemplateItem } from "../actions";
 
@@ -72,6 +67,29 @@ export function TemplateEditor({
   const router = useRouter();
   const [pending, start] = useTransition();
   const { byMuscle, muscleKeys, custom } = groupedLibrary(exercises);
+
+  const comboboxOptions = useMemo((): ComboboxOption[] => {
+    const out: ComboboxOption[] = [];
+    for (const muscle of muscleKeys) {
+      for (const ex of byMuscle.get(muscle)!) {
+        out.push({
+          value: ex.id,
+          label: ex.name,
+          group: muscle,
+          description: ex.weightUnit === "kg" ? "kg" : "lb",
+        });
+      }
+    }
+    for (const ex of custom) {
+      out.push({
+        value: ex.id,
+        label: ex.name,
+        group: "My exercises",
+        description: ex.weightUnit === "kg" ? "kg" : "lb",
+      });
+    }
+    return out;
+  }, [byMuscle, muscleKeys, custom]);
 
   function onAddFromLibrary(exerciseId: string) {
     if (!exerciseId) return;
@@ -193,45 +211,21 @@ export function TemplateEditor({
             this workout.
           </p>
           <div className="space-y-2">
-            <Label>Add exercise</Label>
-            <Select
+            <Label htmlFor={`${templateId}-add-exercise`}>Add exercise</Label>
+            <AutocompleteCombobox
+              id={`${templateId}-add-exercise`}
+              aria-label="Add exercise from library"
+              options={comboboxOptions}
+              value={null}
+              onValueChange={(v) => {
+                if (v) onAddFromLibrary(v);
+              }}
+              clearAfterSelect
               disabled={pending}
-              onValueChange={(v) => onAddFromLibrary(String(v))}
-            >
-              <SelectTrigger className="min-h-12 w-full text-base">
-                <SelectValue placeholder="Choose…" />
-              </SelectTrigger>
-              <SelectContent>
-                {muscleKeys.map((muscle) => (
-                  <SelectGroup key={muscle}>
-                    <SelectLabel>{muscle}</SelectLabel>
-                    {byMuscle.get(muscle)!.map((ex) => (
-                      <SelectItem key={ex.id} value={ex.id}>
-                        {ex.name}
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {ex.weightUnit === "kg" ? "kg" : "lb"}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-                {custom.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel>My exercises</SelectLabel>
-                    {custom.map((ex) => (
-                      <SelectItem key={ex.id} value={ex.id}>
-                        {ex.name}
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {ex.weightUnit === "kg" ? "kg" : "lb"}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-              </SelectContent>
-            </Select>
+              placeholder="Search exercises…"
+              emptyText="No exercises match your search."
+              inputClassName="min-h-12 text-base"
+            />
           </div>
         </section>
       ) : null}

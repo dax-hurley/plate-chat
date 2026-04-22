@@ -1,6 +1,10 @@
 import { and, asc, eq, gte, inArray, like } from "drizzle-orm";
 
 import { db, type Database } from "@/db/client";
+import {
+  MAX_MEAL_SLOTS_PER_DAY,
+  MAX_SNACK_SLOTS_PER_DAY,
+} from "@/lib/meal-plan-constants";
 import { computeMealPlanSlotLabels } from "@/lib/meal-slot-labels";
 import {
   mealLibraryItems,
@@ -483,6 +487,12 @@ export async function addMealSlotForDay(
     const sorted = [...daySlots].sort((a, b) => a.slotIndex - b.slotIndex);
 
     if (input.kind === "snack") {
+      const snackCount = sorted.filter((s) => s.slotKind === "snack").length;
+      if (snackCount >= MAX_SNACK_SLOTS_PER_DAY) {
+        throw new Error(
+          `At most ${MAX_SNACK_SLOTS_PER_DAY} snacks per day in the meal plan.`
+        );
+      }
       const maxIdx =
         sorted.length > 0
           ? Math.max(...sorted.map((s) => s.slotIndex))
@@ -497,6 +507,11 @@ export async function addMealSlotForDay(
       });
     } else {
       const mealSlots = sorted.filter((s) => s.slotKind !== "snack");
+      if (mealSlots.length >= MAX_MEAL_SLOTS_PER_DAY) {
+        throw new Error(
+          `At most ${MAX_MEAL_SLOTS_PER_DAY} meals per day (breakfast through extra lunches and dinner).`
+        );
+      }
       if (mealSlots.length === 0) {
         if (sorted.length > 0) {
           await shiftSlotIndicesRight(tx, plan.id, input.dayIndex, 0);
@@ -575,8 +590,12 @@ export async function removeMealSlot(userId: string, slotId: string) {
       eq(mealPlanSlots.dayIndex, slot.dayIndex)
     ),
   });
-  if (sameDay.length <= 1) {
-    throw new Error("Keep at least one meal per day");
+  const mealCount = sameDay.filter((s) => s.slotKind !== "snack").length;
+  const removingMeal = slot.slotKind !== "snack";
+  if (removingMeal && mealCount <= 3) {
+    throw new Error(
+      "Keep at least three meals: breakfast, lunch, and dinner."
+    );
   }
 
   const now = new Date();

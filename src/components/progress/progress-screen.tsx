@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { Activity } from "lucide-react";
 
 import {
@@ -27,14 +33,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AutocompleteCombobox } from "@/components/ui/autocomplete-combobox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -155,6 +155,11 @@ export function ProgressScreen({
   >({});
   const [vitalRows, setVitalRows] = useState<VitalLogRow[]>([]);
   const [pending, startTransition] = useTransition();
+
+  const exerciseComboboxOptions = useMemo(
+    () => exercises.map((ex) => ({ value: ex.id, label: ex.name })),
+    [exercises]
+  );
 
   const selectedExercise = useMemo(
     () => exercises.find((e) => e.id === exerciseId),
@@ -460,36 +465,18 @@ export function ProgressScreen({
                         No exercises yet.
                       </p>
                     ) : (
-                      <Select
-                        value={exerciseId || undefined}
+                      <AutocompleteCombobox
+                        id="exercise-progress-exercise"
+                        aria-label="Exercise for progress chart"
+                        options={exerciseComboboxOptions}
+                        value={exerciseId || null}
                         onValueChange={(v) => {
-                          if (v != null) setExerciseId(v);
+                          if (v) setExerciseId(v);
                         }}
-                      >
-                        <SelectTrigger
-                          id="exercise-progress-exercise"
-                          className="min-h-12 w-full text-base"
-                        >
-                          <SelectValue placeholder="Choose exercise">
-                            {(value: string | null) =>
-                              value
-                                ? (exercises.find((e) => e.id === value)
-                                    ?.name ?? value)
-                                : "Choose exercise"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {exercises.map((ex) => (
-                            <SelectItem
-                              key={ex.id}
-                              value={ex.id}
-                              label={ex.name}
-                            >
-                              {ex.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Search or choose an exercise…"
+                        emptyText="No exercises match your search."
+                        inputClassName="min-h-12 text-base"
+                      />
                     )}
                   </div>
                 </div>

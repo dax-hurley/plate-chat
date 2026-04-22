@@ -37,6 +37,10 @@ import { MealPlanDayIcon } from "@/lib/shopping-list-section-icons";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { MealLibraryItemJson } from "@/types/meal-library";
+import {
+  MAX_MEAL_SLOTS_PER_DAY,
+  MAX_SNACK_SLOTS_PER_DAY,
+} from "@/lib/meal-plan-constants";
 import type {
   MealPlanBoardViewJson,
   MealPlanLibraryOption,
@@ -114,7 +118,7 @@ function MealSlotTypeIcon({ label }: { label: string }) {
   if (l === "Dinner") {
     return <UtensilsCrossed className="text-chart-2 size-5" aria-hidden />;
   }
-  if (l === "Lunch" || l.startsWith("Lunch ")) {
+  if (l === "Lunch" || /\bLunch\b/i.test(l)) {
     return <Sandwich className="text-chart-1 size-5" aria-hidden />;
   }
   return <UtensilsCrossed className="text-muted-foreground size-5" aria-hidden />;
@@ -230,11 +234,15 @@ export function MealPlanBoard({
   const slotsByDay = useMemo(() => {
     const m = new Map<number, MealPlanBoardViewJson["slots"]>();
     for (const s of plan.slots) {
-      if (!m.has(s.dayIndex)) m.set(s.dayIndex, []);
-      m.get(s.dayIndex)!.push(s);
+      const di = Math.trunc(Number(s.dayIndex));
+      if (di < 0 || di > 6) continue;
+      if (!m.has(di)) m.set(di, []);
+      m.get(di)!.push(s);
     }
     for (const arr of m.values()) {
-      arr.sort((a, b) => a.slotIndex - b.slotIndex);
+      arr.sort(
+        (a, b) => Number(a.slotIndex) - Number(b.slotIndex)
+      );
     }
     return m;
   }, [plan.slots]);
@@ -399,6 +407,18 @@ export function MealPlanBoard({
       >
             {Array.from({ length: 7 }, (_, dayIndex) => {
               const daySlots = slotsByDay.get(dayIndex) ?? [];
+              const mainMealCountForDay = plan.slots.filter(
+                (s) =>
+                  Math.trunc(Number(s.dayIndex)) === dayIndex &&
+                  s.slotKind !== "snack"
+              ).length;
+              const snackCountForDay = plan.slots.filter(
+                (s) =>
+                  Math.trunc(Number(s.dayIndex)) === dayIndex &&
+                  s.slotKind === "snack"
+              ).length;
+              const atMealCap = mainMealCountForDay >= MAX_MEAL_SLOTS_PER_DAY;
+              const atSnackCap = snackCountForDay >= MAX_SNACK_SLOTS_PER_DAY;
               return (
                 <AccordionItem
                   key={dayIndex}
@@ -440,39 +460,75 @@ export function MealPlanBoard({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="touch-manipulation gap-1"
-                            disabled={pending || libraryOptions.length === 0}
+                            className="touch-manipulation gap-1.5"
+                            disabled={
+                              pending ||
+                              libraryOptions.length === 0 ||
+                              atMealCap
+                            }
+                            title={
+                              atMealCap
+                                ? `Up to ${MAX_MEAL_SLOTS_PER_DAY} main meals per day`
+                                : "Add a meal slot (after breakfast, before dinner)"
+                            }
                             onClick={() => {
                               startTransition(async () => {
-                                await actionAddMealPlanSlot(
-                                  weekStartDayKey,
-                                  dayIndex,
-                                  "meal"
-                                );
-                                router.refresh();
+                                try {
+                                  await actionAddMealPlanSlot(
+                                    weekStartDayKey,
+                                    dayIndex,
+                                    "meal"
+                                  );
+                                  router.refresh();
+                                } catch (e) {
+                                  toast.error(
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Could not add meal"
+                                  );
+                                }
                               });
                             }}
                           >
                             <Plus className="size-4" aria-hidden />
+                            <UtensilsCrossed className="size-4" aria-hidden />
                             Add meal
                           </Button>
                           <Button
                             type="button"
                             variant="secondary"
                             size="sm"
-                            className="touch-manipulation gap-1"
-                            disabled={pending || libraryOptions.length === 0}
+                            className="touch-manipulation gap-1.5"
+                            disabled={
+                              pending ||
+                              libraryOptions.length === 0 ||
+                              atSnackCap
+                            }
+                            title={
+                              atSnackCap
+                                ? `Up to ${MAX_SNACK_SLOTS_PER_DAY} snacks per day`
+                                : "Add a snack slot"
+                            }
                             onClick={() => {
                               startTransition(async () => {
-                                await actionAddMealPlanSlot(
-                                  weekStartDayKey,
-                                  dayIndex,
-                                  "snack"
-                                );
-                                router.refresh();
+                                try {
+                                  await actionAddMealPlanSlot(
+                                    weekStartDayKey,
+                                    dayIndex,
+                                    "snack"
+                                  );
+                                  router.refresh();
+                                } catch (e) {
+                                  toast.error(
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Could not add snack"
+                                  );
+                                }
                               });
                             }}
                           >
+                            <Plus className="size-4" aria-hidden />
                             <Cookie className="size-4" aria-hidden />
                             Add snack
                           </Button>
@@ -481,16 +537,20 @@ export function MealPlanBoard({
                     ) : null}
                   </div>
                   <AccordionContent className="px-4 pb-4 pt-2 sm:px-5">
-                    <div className="space-y-4 pt-1">
+                    <div
+                      className="flex min-h-0 w-full min-w-0 flex-col gap-3 pt-1 [scrollbar-gutter:stable]"
+                    >
                   {daySlots.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-muted-foreground w-full min-w-0 text-sm">
                       {planEditMode
                         ? "No slots — add a meal or snack above."
                         : "No slots — use Edit plan to add meals or snacks."}
                     </p>
                   ) : (
                     daySlots.map((slot) => {
-                      const canRemove = daySlots.length > 1;
+                      const isSnackSlot = slot.slotKind === "snack";
+                      const canRemove =
+                        isSnackSlot || mainMealCountForDay > 3;
                       const draftLibId = planEditMode
                         ? assignmentFromDraft(slot, draftLibraryBySlotId)
                         : slot.libraryItemId;
@@ -516,23 +576,22 @@ export function MealPlanBoard({
                             }
                           }}
                           className={cn(
-                            "border-border/60 bg-background/50 rounded-lg border p-3 text-left transition-colors",
+                            "border-border/60 bg-background/50 flex w-full min-w-0 flex-col rounded-lg border p-3 text-left transition-colors",
                             !planEditMode &&
                               slot.libraryItem &&
-                              "cursor-pointer"
+                              "cursor-pointer hover:border-primary/30 hover:bg-primary/[0.04]"
                           )}
                         >
-                          <div className="flex items-stretch gap-2 sm:gap-3">
-                            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-                              <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:max-w-[13rem]">
+                          <div className="flex w-full min-w-0 flex-col gap-2">
+                            <div className="flex w-full min-w-0 items-start gap-2.5">
                               <div
                                 className="bg-muted/70 flex size-10 shrink-0 items-center justify-center rounded-lg"
                                 aria-hidden
                               >
                                 <MealSlotTypeIcon label={slot.label} />
                               </div>
-                              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pt-0.5">
-                                <span className="text-foreground truncate text-sm font-semibold">
+                              <div className="flex min-w-0 flex-1 items-start justify-between gap-1 pt-0.5">
+                                <span className="text-foreground line-clamp-2 text-left text-sm font-semibold">
                                   {slot.label}
                                 </span>
                                 {canRemove && planEditMode ? (
@@ -541,7 +600,7 @@ export function MealPlanBoard({
                                     variant="ghost"
                                     size="icon"
                                     data-meal-slot-no-bubble
-                                    className="text-muted-foreground hover:text-destructive size-9 shrink-0"
+                                    className="text-muted-foreground hover:text-destructive relative z-20 -mr-1 size-8 shrink-0"
                                     disabled={removingSlotId === slot.id}
                                     title="Remove this slot"
                                     onClick={(e) => {
@@ -566,10 +625,20 @@ export function MealPlanBoard({
                                   >
                                     <Trash2 className="size-4" aria-hidden />
                                   </Button>
+                                ) : !planEditMode && slot.libraryItem ? (
+                                  <div
+                                    className="text-muted-foreground/70 -mr-0.5 flex shrink-0"
+                                    aria-hidden
+                                  >
+                                    <ChevronRight
+                                      className="size-4"
+                                      strokeWidth={2.25}
+                                    />
+                                  </div>
                                 ) : null}
                               </div>
-                              </div>
-                              <div className="min-w-0 flex-[2]">
+                            </div>
+                            <div className="w-full min-w-0 pl-0 sm:pl-0">
                               {planEditMode ? (
                                 <div
                                   data-meal-slot-no-bubble
@@ -608,7 +677,7 @@ export function MealPlanBoard({
                                 <>
                                   <p
                                     className={cn(
-                                      "text-sm leading-snug",
+                                      "line-clamp-2 text-left text-sm leading-snug",
                                       slot.libraryItem
                                         ? "text-foreground font-medium"
                                         : "text-muted-foreground"
@@ -628,19 +697,7 @@ export function MealPlanBoard({
                                   ) : null}
                                 </>
                               )}
-                              </div>
                             </div>
-                            {!planEditMode && slot.libraryItem ? (
-                              <div
-                                className="text-muted-foreground/70 flex shrink-0 flex-col justify-center"
-                                aria-hidden
-                              >
-                                <ChevronRight
-                                  className="size-5"
-                                  strokeWidth={2.25}
-                                />
-                              </div>
-                            ) : null}
                           </div>
                         </div>
                       );

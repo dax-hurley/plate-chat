@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Flame, Salad } from "lucide-react";
+import {
+  Beef,
+  ChevronLeft,
+  ChevronRight,
+  Droplets,
+  Flame,
+  Salad,
+  Wheat,
+} from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { requireUserId } from "@/lib/auth-user";
@@ -124,44 +132,46 @@ export default async function NutritionPage({
       </div>
 
       <section className="border-primary/15 bg-card rounded-xl border p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Flame className="text-chart-2 size-5" aria-hidden />
-          <h2 className="text-lg font-semibold">Day totals</h2>
-        </div>
+        <h2 className="text-lg font-semibold">Day totals</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+          <div className="border-chart-2/25 bg-chart-2/5 rounded-lg border p-3">
+            <p className="text-chart-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Flame className="size-3.5 shrink-0" aria-hidden />
               Calories
             </p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="text-chart-2 mt-1 text-2xl font-semibold tabular-nums">
               {Math.round(totals.calories)}
             </p>
+            <p className="text-chart-2/80 mt-0.5 text-xs">kcal</p>
           </div>
-          <div>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+          <div className="border-chart-1/25 bg-chart-1/5 rounded-lg border p-3">
+            <p className="text-chart-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Beef className="size-3.5 shrink-0" aria-hidden />
               Protein
             </p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="text-chart-1 mt-1 text-2xl font-semibold tabular-nums">
               {Math.round(totals.proteinG)}
-              <span className="text-muted-foreground ml-0.5 text-sm">g</span>
+              <span className="text-chart-1/80 ml-0.5 text-sm">g</span>
             </p>
           </div>
-          <div>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+          <div className="border-chart-4/25 bg-chart-4/5 rounded-lg border p-3">
+            <p className="text-chart-4 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Wheat className="size-3.5 shrink-0" aria-hidden />
               Carbs
             </p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="text-chart-4 mt-1 text-2xl font-semibold tabular-nums">
               {Math.round(totals.carbsG)}
-              <span className="text-muted-foreground ml-0.5 text-sm">g</span>
+              <span className="text-chart-4/80 ml-0.5 text-sm">g</span>
             </p>
           </div>
-          <div>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+          <div className="border-chart-3/25 bg-chart-3/5 rounded-lg border p-3">
+            <p className="text-chart-3 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Droplets className="size-3.5 shrink-0" aria-hidden />
               Fat
             </p>
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="text-chart-3 mt-1 text-2xl font-semibold tabular-nums">
               {Math.round(totals.fatG)}
-              <span className="text-muted-foreground ml-0.5 text-sm">g</span>
+              <span className="text-chart-3/80 ml-0.5 text-sm">g</span>
             </p>
           </div>
         </div>

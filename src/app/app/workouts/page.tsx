@@ -98,10 +98,6 @@ export default async function WorkoutsPage() {
           </ul>
         </section>
       ) : null}
-
-      <section className="border-primary/15 bg-card rounded-xl border p-4 shadow-sm">
-        <CreateWorkoutRoutineForm />
-      </section>
     </div>
   );
 }

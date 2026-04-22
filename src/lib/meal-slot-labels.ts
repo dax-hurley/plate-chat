@@ -1,4 +1,21 @@
-/** Labels for main meal slots (breakfast → lunches → dinner), excluding snacks. */
+/** Ordinal for "2nd Lunch" … "10th Lunch" (index 0 = 1st, unused for the word "Lunch" alone). */
+const LUNCH_ORD: readonly string[] = [
+  "1st",
+  "2nd",
+  "3rd",
+  "4th",
+  "5th",
+  "6th",
+  "7th",
+  "8th",
+  "9th",
+  "10th",
+];
+
+/**
+ * Labels for main meal slots (breakfast → lunches → dinner), excluding snacks.
+ * With 4+ meals, middle slots are Lunch, 2nd Lunch, 3rd Lunch, … up to 10th Lunch.
+ */
 export function labelForMealSlot(mealIndex: number, mealCount: number): string {
   if (mealCount <= 0) return "Meal";
   if (mealCount === 1) return "Dinner";
@@ -11,7 +28,11 @@ export function labelForMealSlot(mealIndex: number, mealCount: number): string {
   if (mealIndex === 0) return "Breakfast";
   if (mealIndex === mealCount - 1) return "Dinner";
   const midIndex = mealIndex - 1;
-  return midIndex === 0 ? "Lunch" : `Lunch ${midIndex + 1}`;
+  if (midIndex === 0) return "Lunch";
+  if (midIndex >= 1 && midIndex < LUNCH_ORD.length) {
+    return `${LUNCH_ORD[midIndex]!} Lunch`;
+  }
+  return `Meal ${mealIndex + 1}`;
 }
 
 /** Snack slots: Snack, Snack 2, … */
