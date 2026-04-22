@@ -1,0 +1,85 @@
+# Deploy the Next.js app to AWS with SST (Ion).
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   AWS_ROLE_ARN          — IAM role for GitHub OIDC → AWS (deploy)
+#   TURSO_DATABASE_URL    — libsql://… (SST secret TursoDatabaseUrl)
+#   TURSO_AUTH_TOKEN      — Turso token (SST secret TursoAuthToken)
+#   AUTH_SECRET           — NextAuth signing secret (SST secret AuthSecret)
+#   AUTH_URL              — public app URL, https (SST secret AuthUrl)
+#   ANTHROPIC_API_KEY     — Claude (coach + AI shopping list); required in prod
+#
+# Optional (set via `npx sst secret set` or Lambda env if you use Turso Platform for per-user DBs):
+#   TURSO_PLATFORM_API_TOKEN, TURSO_ORG_SLUG, TURSO_GROUP_NAME — see sst.config.ts header
+#
+# Each deploy runs `sst secret load` then `sst deploy`. Override locally anytime with
+# `npx sst secret set --stage production …` if needed.
+#
+# GitHub OIDC setup:
+# https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          # Match the region you use with SST/AWS; set repository variable AWS_REGION if not us-east-1.
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Sync GitHub secrets to SST
+        env:
+          TursoDatabaseUrl: ${{ secrets.TURSO_DATABASE_URL }}
+          TursoAuthToken: ${{ secrets.TURSO_AUTH_TOKEN }}
+          AuthSecret: ${{ secrets.AUTH_SECRET }}
+          AuthUrl: ${{ secrets.AUTH_URL }}
+          AnthropicApiKey: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "${AnthropicApiKey:-}" ]; then
+            echo "::error::Set repository secret ANTHROPIC_API_KEY (Claude is required in production)."
+            exit 1
+          fi
+          secrets_file="$(mktemp)"
+          {
+            echo "TursoDatabaseUrl=${TursoDatabaseUrl}"
+            echo "TursoAuthToken=${TursoAuthToken}"
+            echo "AuthSecret=${AuthSecret}"
+            echo "AuthUrl=${AuthUrl}"
+            echo "AnthropicApiKey=${AnthropicApiKey}"
+          } >"$secrets_file"
+          npx sst secret load "$secrets_file" --stage production
+          rm -f "$secrets_file"
+
+      - name: Deploy to AWS (SST)
+        run: npx sst deploy --stage production
+        env:
+          # Optional: avoid OOM on large Next builds in CI.
+          NODE_OPTIONS: --max-old-space-size=6144
