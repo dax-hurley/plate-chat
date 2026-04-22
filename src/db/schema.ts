@@ -10,10 +10,24 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 /**
- * Auth.js user table. Shape matches `@auth/drizzle-adapter`'s SQLite default
- * (column names: `id`, `name`, `email`, `emailVerified`, `image`). We add
- * `passwordHash` so the Credentials provider in `src/auth.ts` can sign in
- * with email + password.
+ * Sync columns shared by every offline-first table. Server writes set
+ * `updatedAt = now()` and `rev = rev + 1`; clients propose writes with an
+ * `assumedMasterState` and server resolves conflicts via last-write-wins on
+ * `updatedAt`. `deletedAt` is the soft-delete tombstone — replicated like any
+ * other update so offline devices learn about deletes.
+ */
+export const syncCols = {
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  deletedAt: integer("deletedAt", { mode: "timestamp_ms" }),
+  rev: integer("rev").notNull().default(1),
+};
+
+/**
+ * Shared user row. better-auth owns the credential (stored in `ba_account`)
+ * and the session (`ba_session`); the rest of the app just references
+ * `users.id`.
  */
 export const users = sqliteTable("user", {
   id: text("id")
@@ -21,69 +35,15 @@ export const users = sqliteTable("user", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name"),
   email: text("email").unique(),
-  emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
+  emailVerified: integer("emailVerified", { mode: "boolean" }),
   image: text("image"),
-  passwordHash: text("passwordHash"),
-});
-
-export const accounts = sqliteTable(
-  "account",
-  {
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    provider: text("provider").notNull(),
-    providerAccountId: text("providerAccountId").notNull(),
-    refresh_token: text("refresh_token"),
-    access_token: text("access_token"),
-    expires_at: integer("expires_at"),
-    token_type: text("token_type"),
-    scope: text("scope"),
-    id_token: text("id_token"),
-    session_state: text("session_state"),
-  },
-  (t) => [
-    primaryKey({ columns: [t.provider, t.providerAccountId] }),
-  ]
-);
-
-export const sessions = sqliteTable("session", {
-  sessionToken: text("sessionToken").primaryKey(),
-  userId: text("userId")
+  createdAt: integer("createdAt", { mode: "timestamp_ms" })
     .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
 });
-
-export const verificationTokens = sqliteTable(
-  "verificationToken",
-  {
-    identifier: text("identifier").notNull(),
-    token: text("token").notNull(),
-    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.identifier, t.token] })]
-);
-
-export const authenticators = sqliteTable(
-  "authenticator",
-  {
-    credentialID: text("credentialID").notNull().unique(),
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    providerAccountId: text("providerAccountId").notNull(),
-    credentialPublicKey: text("credentialPublicKey").notNull(),
-    counter: integer("counter").notNull(),
-    credentialDeviceType: text("credentialDeviceType").notNull(),
-    credentialBackedUp: integer("credentialBackedUp", {
-      mode: "boolean",
-    }).notNull(),
-    transports: text("transports"),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.credentialID] })]
-);
 
 /** Personal access tokens for `/api/v1` Bearer auth (see `src/lib/pat-token.ts`). */
 export const personalAccessTokens = sqliteTable(
@@ -135,8 +95,12 @@ export const exercises = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
-  (t) => [index("exercises_user_idx").on(t.userId)]
+  (t) => [
+    index("exercises_user_idx").on(t.userId),
+    index("exercises_sync_idx").on(t.userId, t.updatedAt, t.id),
+  ]
 );
 
 /**
@@ -156,10 +120,12 @@ export const workoutRoutineGroups = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("workout_routine_groups_user_idx").on(t.userId),
     index("workout_routine_groups_user_sort_idx").on(t.userId, t.sortOrder),
+    index("workout_routine_groups_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -181,10 +147,12 @@ export const workoutTemplates = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("workout_templates_user_idx").on(t.userId),
     index("workout_templates_routine_group_idx").on(t.routineGroupId),
+    index("workout_templates_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -194,6 +162,7 @@ export const workoutTemplateItems = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     templateId: text("templateId")
       .notNull()
       .references(() => workoutTemplates.id, { onDelete: "cascade" }),
@@ -241,10 +210,12 @@ export const workoutTemplateItems = sqliteTable(
     })
       .notNull()
       .default(false),
+    ...syncCols,
   },
   (t) => [
     index("workout_template_items_template_idx").on(t.templateId),
     index("workout_template_items_exercise_idx").on(t.exerciseId),
+    index("workout_template_items_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -261,10 +232,12 @@ export const workoutSessions = sqliteTable(
     startedAt: integer("startedAt", { mode: "timestamp_ms" }).notNull(),
     endedAt: integer("endedAt", { mode: "timestamp_ms" }),
     status: text("status").notNull().default("active"),
+    ...syncCols,
   },
   (t) => [
     index("workout_sessions_user_idx").on(t.userId),
     index("workout_sessions_status_idx").on(t.userId, t.status),
+    index("workout_sessions_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -274,6 +247,7 @@ export const workoutSets = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     sessionId: text("sessionId")
       .notNull()
       .references(() => workoutSessions.id, { onDelete: "cascade" }),
@@ -290,10 +264,12 @@ export const workoutSets = sqliteTable(
     completedAt: integer("completedAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("workout_sets_session_idx").on(t.sessionId),
     index("workout_sets_session_exercise_idx").on(t.sessionId, t.exerciseId),
+    index("workout_sets_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -307,6 +283,7 @@ export const workoutSessionExercisePrefs = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     sessionId: text("sessionId")
       .notNull()
       .references(() => workoutSessions.id, { onDelete: "cascade" }),
@@ -317,9 +294,7 @@ export const workoutSessionExercisePrefs = sqliteTable(
     workingDurationSec: integer("workingDurationSec"),
     /** Session override for target distance (same unit as exercise). */
     workingDistance: real("workingDistance"),
-    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
-      .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     uniqueIndex("workout_session_exercise_prefs_session_ex_uq").on(
@@ -327,6 +302,11 @@ export const workoutSessionExercisePrefs = sqliteTable(
       t.exerciseId
     ),
     index("workout_session_exercise_prefs_session_idx").on(t.sessionId),
+    index("workout_session_exercise_prefs_sync_idx").on(
+      t.userId,
+      t.updatedAt,
+      t.id
+    ),
   ]
 );
 
@@ -346,10 +326,12 @@ export const workoutScheduledItems = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("workout_scheduled_user_day_idx").on(t.userId, t.dayKey),
     index("workout_scheduled_template_idx").on(t.templateId),
+    index("workout_scheduled_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -373,22 +355,32 @@ export const workoutRecurringRules = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
-  (t) => [index("workout_recurring_rules_user_idx").on(t.userId)]
+  (t) => [
+    index("workout_recurring_rules_user_idx").on(t.userId),
+    index("workout_recurring_rules_sync_idx").on(t.userId, t.updatedAt, t.id),
+  ]
 );
 
 /** Omit one generated occurrence of a recurring rule (like Google "this event only"). */
 export const workoutRecurringSkips = sqliteTable(
   "workout_recurring_skips",
   {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     ruleId: text("ruleId")
       .notNull()
       .references(() => workoutRecurringRules.id, { onDelete: "cascade" }),
     dayKey: text("dayKey").notNull(),
+    ...syncCols,
   },
-  (t) => ({
-    pk: primaryKey({ columns: [t.ruleId, t.dayKey] }),
-  })
+  (t) => [
+    uniqueIndex("workout_recurring_skips_rule_day_uq").on(t.ruleId, t.dayKey),
+    index("workout_recurring_skips_sync_idx").on(t.userId, t.updatedAt, t.id),
+  ]
 );
 
 export const meals = sqliteTable(
@@ -404,11 +396,13 @@ export const meals = sqliteTable(
     name: text("name").notNull(),
     /** Meal-library recipe id when logged via plan quick-add (plain id; library row may be deleted). */
     sourceLibraryItemId: text("sourceLibraryItemId"),
+    ...syncCols,
   },
   (t) => [
     index("meals_user_logged_idx").on(t.userId, t.loggedAt),
     index("meals_user_day_idx").on(t.userId, t.dayKey),
     index("meals_source_library_idx").on(t.sourceLibraryItemId),
+    index("meals_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -418,6 +412,7 @@ export const mealEntries = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     mealId: text("mealId")
       .notNull()
       .references(() => meals.id, { onDelete: "cascade" }),
@@ -426,8 +421,12 @@ export const mealEntries = sqliteTable(
     proteinG: real("proteinG").notNull().default(0),
     carbsG: real("carbsG").notNull().default(0),
     fatG: real("fatG").notNull().default(0),
+    ...syncCols,
   },
-  (t) => [index("meal_entries_meal_idx").on(t.mealId)]
+  (t) => [
+    index("meal_entries_meal_idx").on(t.mealId),
+    index("meal_entries_sync_idx").on(t.userId, t.updatedAt, t.id),
+  ]
 );
 
 /** Saved recipes for meal planning (distinct from daily `meals` log). */
@@ -447,13 +446,12 @@ export const mealLibraryItems = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
-    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
-      .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("meal_library_items_user_idx").on(t.userId),
     index("meal_library_items_user_name_idx").on(t.userId, t.name),
+    index("meal_library_items_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -463,15 +461,18 @@ export const mealLibraryIngredients = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     libraryItemId: text("libraryItemId")
       .notNull()
       .references(() => mealLibraryItems.id, { onDelete: "cascade" }),
     sortOrder: integer("sortOrder").notNull().default(0),
     /** One shopping-list line, e.g. "2 cups rolled oats". */
     line: text("line").notNull(),
+    ...syncCols,
   },
   (t) => [
     index("meal_library_ingredients_item_idx").on(t.libraryItemId),
+    index("meal_library_ingredients_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -487,16 +488,15 @@ export const mealPlans = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
-    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
-      .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
     /** JSON array of retail-friendly lines; paired with `shoppingListSourceHash`. */
     aiShoppingListJson: text("aiShoppingListJson").notNull().default("[]"),
     /** SHA-256 of aggregated ingredient lines; invalidates AI list when recipes or slots change. */
     shoppingListSourceHash: text("shoppingListSourceHash"),
+    ...syncCols,
   },
   (t) => [
     uniqueIndex("meal_plans_user_week_uq").on(t.userId, t.weekStartDayKey),
+    index("meal_plans_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -506,6 +506,7 @@ export const mealPlanSlots = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
     planId: text("planId")
       .notNull()
       .references(() => mealPlans.id, { onDelete: "cascade" }),
@@ -520,6 +521,7 @@ export const mealPlanSlots = sqliteTable(
     libraryItemId: text("libraryItemId").references(() => mealLibraryItems.id, {
       onDelete: "set null",
     }),
+    ...syncCols,
   },
   (t) => [
     uniqueIndex("meal_plan_slots_plan_day_slot_uq").on(
@@ -528,6 +530,7 @@ export const mealPlanSlots = sqliteTable(
       t.slotIndex
     ),
     index("meal_plan_slots_plan_idx").on(t.planId),
+    index("meal_plan_slots_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -546,6 +549,7 @@ export const userVitalEntries = sqliteTable(
     dayKey: text("dayKey").notNull(),
     value: real("value").notNull(),
     recordedAt: integer("recordedAt", { mode: "timestamp_ms" }).notNull(),
+    ...syncCols,
   },
   (t) => [
     uniqueIndex("user_vital_entries_user_key_day_uq").on(
@@ -555,6 +559,7 @@ export const userVitalEntries = sqliteTable(
     ),
     index("user_vital_entries_user_day_idx").on(t.userId, t.dayKey),
     index("user_vital_entries_user_key_idx").on(t.userId, t.vitalKey),
+    index("user_vital_entries_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -571,6 +576,7 @@ export const userProfiles = sqliteTable("user_profiles", {
   goalProteinG: real("goalProteinG"),
   goalCarbsG: real("goalCarbsG"),
   goalFatG: real("goalFatG"),
+  ...syncCols,
 });
 
 /** AI coach chat threads; `messages` stores JSON-encoded `UIMessage[]`. */
@@ -586,13 +592,12 @@ export const coachConversations = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
-    updatedAt: integer("updatedAt", { mode: "timestamp_ms" })
-      .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    ...syncCols,
   },
   (t) => [
     index("coach_conversations_user_idx").on(t.userId),
     index("coach_conversations_user_updated_idx").on(t.userId, t.updatedAt),
+    index("coach_conversations_sync_idx").on(t.userId, t.updatedAt, t.id),
   ]
 );
 
@@ -754,3 +759,94 @@ export const mealPlanSlotsRelations = relations(mealPlanSlots, ({ one }) => ({
     references: [mealLibraryItems.id],
   }),
 }));
+
+/**
+ * Long-lived per-device auth. On initial online login the client exchanges a
+ * better-auth session for an access+refresh pair (see `src/server/auth/*`).
+ * Sync API takes the access token as Bearer, refresh token rotates it.
+ */
+export const deviceTokens = sqliteTable(
+  "device_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("userId").notNull(),
+    deviceName: text("deviceName").notNull().default(""),
+    /** SHA-256 of the refresh token; never store the raw value. */
+    refreshTokenHash: text("refreshTokenHash").notNull().unique(),
+    accessExpiresAt: integer("accessExpiresAt", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    refreshExpiresAt: integer("refreshExpiresAt", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    revokedAt: integer("revokedAt", { mode: "timestamp_ms" }),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    lastSeenAt: integer("lastSeenAt", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("device_tokens_user_idx").on(t.userId)]
+);
+
+/* ----------------------------------------------------------------------
+ * better-auth schema
+ *
+ * New parallel tables used by better-auth (parallel to legacy NextAuth
+ * `account` / `session` / etc.). At cutover we delete the old NextAuth
+ * tables; better-auth's `baUser` aliases the existing `user` row so
+ * passwords & user IDs stay stable.
+ * -------------------------------------------------------------------- */
+
+export const baSessions = sqliteTable(
+  "ba_session",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("ba_session_user_idx").on(t.userId)]
+);
+
+export const baAccounts = sqliteTable(
+  "ba_account",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: integer("accessTokenExpiresAt", {
+      mode: "timestamp_ms",
+    }),
+    refreshTokenExpiresAt: integer("refreshTokenExpiresAt", {
+      mode: "timestamp_ms",
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("ba_account_user_idx").on(t.userId)]
+);
+
+export const baVerifications = sqliteTable("ba_verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+});

@@ -1,6 +1,7 @@
 /**
- * Deletes all application data while keeping `user` rows.
- * Also clears NextAuth tables (accounts/sessions/authenticators/verificationTokens) and PATs.
+ * Deletes all application data while keeping `user` rows and their
+ * better-auth credentials (`ba_account`). Sessions and device tokens are
+ * cleared so every device must re-login.
  *
  * Usage: `npm run db:wipe-non-users` — you will be prompted to type `yes`.
  * Env: DATABASE_URL (optional, defaults to file:./data/local.db).
@@ -15,9 +16,10 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import {
-  accounts,
-  authenticators,
+  baSessions,
+  baVerifications,
   coachConversations,
+  deviceTokens,
   exercises,
   mealEntries,
   mealLibraryIngredients,
@@ -26,11 +28,9 @@ import {
   mealPlans,
   meals,
   personalAccessTokens,
-  sessions,
   userProfiles,
   userVitalEntries,
   users,
-  verificationTokens,
   workoutRecurringRules,
   workoutRecurringSkips,
   workoutRoutineGroups,
@@ -63,10 +63,9 @@ const TABLES_IN_DELETE_ORDER = [
   userProfiles,
   coachConversations,
   exercises,
-  accounts,
-  sessions,
-  authenticators,
-  verificationTokens,
+  baSessions,
+  baVerifications,
+  deviceTokens,
   personalAccessTokens,
 ] as const;
 
@@ -80,7 +79,7 @@ async function confirmInteractive(): Promise<boolean> {
   const rl = readline.createInterface({ input, output });
   try {
     const line = await rl.question(
-      'This will delete ALL data and clear auth/PAT rows, keeping only `user` rows. Type "yes" to continue: '
+      'This will delete ALL app data and clear sessions/device tokens, keeping `user` rows and their credentials. Type "yes" to continue: '
     );
     return line.trim().toLowerCase() === "yes";
   } finally {

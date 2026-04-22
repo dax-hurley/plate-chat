@@ -25,7 +25,7 @@ import {
   workoutTemplates,
 } from "@/db/schema";
 import { addDaysKey, formatDayKey, parseDayKey } from "@/lib/date-key";
-import { hashPassword } from "@/lib/password";
+import { auth } from "@/server/auth/config";
 import { ensurePresetExercisesSeeded } from "@/lib/services/workouts";
 
 const SEED_EMAIL = process.env.SEED_USER_EMAIL ?? "seed@test.local";
@@ -121,13 +121,10 @@ async function main() {
     userId = existing.id;
     console.log(`Using existing user ${SEED_EMAIL} (skipped account creation).`);
   } else {
-    userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      name: SEED_NAME,
-      email: SEED_EMAIL,
-      passwordHash: await hashPassword(SEED_PASSWORD),
+    const res = await auth.api.signUpEmail({
+      body: { email: SEED_EMAIL, password: SEED_PASSWORD, name: SEED_NAME },
     });
+    userId = res.user.id;
     console.log(`Created user ${SEED_EMAIL} (password: ${SEED_PASSWORD})`);
   }
 
