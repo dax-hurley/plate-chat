@@ -19,6 +19,8 @@
 # build output
 dist/
 dev-dist/
+.nitro/
+.output/
 
 # production
 /build

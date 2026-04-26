@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "npx sst install",
     "build": "vite build",
     "clean": "bash scripts/clean.sh",
     "clean:dry": "bash scripts/clean.sh -n",

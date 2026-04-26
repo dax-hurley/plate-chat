@@ -12,8 +12,12 @@
  *   npx sst secret set --stage prod TursoDatabaseUrl "libsql://..."
  *   npx sst secret set --stage prod TursoAuthToken   "..."
  *   npx sst secret set --stage prod BetterAuthSecret "$(openssl rand -base64 32)"
- *   npx sst secret set --stage prod AppUrl           "https://…"
+ *   npx sst secret set --stage prod AppUrl           "https://platechat.ai"
  *   npx sst secret set --stage prod AnthropicApiKey  "sk-ant-..."
+ *
+ * Custom domain: production uses `platechat.ai` (www → apex). DNS is managed via
+ * the default `sst.aws.dns()` (Route 53 in this AWS account). For Cloudflare,
+ * Vercel, or manual DNS, see https://sst.dev/docs/custom-domains/
  *
  * NextAuth-era secrets (`AuthSecret`, `AuthUrl`) are no longer used — better-auth
  * + device tokens replace them.
@@ -35,6 +39,15 @@ export default $config({
     const anthropicApiKey = new sst.Secret("AnthropicApiKey");
 
     const web = new sst.aws.TanStackStart("Web", {
+      // Prod only: same zone cannot serve two stages. Staging keeps the CloudFront URL.
+      ...($app.stage === "prod"
+        ? {
+            domain: {
+              name: "platechat.ai",
+              redirects: ["www.platechat.ai"],
+            },
+          }
+        : {}),
       link: [
         tursoUrl,
         tursoToken,
