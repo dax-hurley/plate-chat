@@ -3,7 +3,6 @@
 # dependencies
 /node_modules
 /mcp-server/node_modules
-/mcp-server/dist
 /data/*.db
 /data/*.db-*
 /.pnp
@@ -17,9 +16,9 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
+# build output
+dist/
+dev-dist/
 
 # production
 /build
@@ -43,10 +42,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
 # sst
 .sst
-
-# open-next
-.open-next
