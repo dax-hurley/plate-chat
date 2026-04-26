@@ -129,6 +129,30 @@ export function useMealLibraryIngredients(libraryItemId: string | null) {
   );
 }
 
+/** All ingredient lines for a set of library items (e.g. meal plan slot joins). */
+export function useMealLibraryIngredientsForItems(libraryItemIds: string[]) {
+  const { db } = useDb();
+  const idKey = [...new Set(libraryItemIds)].sort().join(",");
+  return useLiveArray<MealLibraryIngredient>(
+    async () => {
+      if (!db || libraryItemIds.length === 0) return [];
+      const set = new Set(libraryItemIds);
+      const rows = (await db.mealLibraryIngredients
+        .toArray()) as unknown as MealLibraryIngredient[];
+      return rows
+        .filter(
+          (r) => r.deletedAt === null && set.has(r.libraryItemId)
+        )
+        .sort(
+          (a, b) =>
+            a.libraryItemId.localeCompare(b.libraryItemId) ||
+            a.sortOrder - b.sortOrder
+        );
+    },
+    [db, idKey]
+  );
+}
+
 export function useNutritionMutations() {
   const { db, ready } = useDb();
   const { userId } = useLocalSession();

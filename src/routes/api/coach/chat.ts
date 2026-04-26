@@ -72,21 +72,49 @@ async function handlePost({ request }: { request: Request }): Promise<Response> 
   if (!conv) return clientErrorResponse(404, "Conversation not found.");
 
   try {
-    const { systemWithProfile, modelMessages, modelId, tools } =
-      await getCoachModelInput(userId, messages);
+    const { system, modelMessages, modelId, tools } = await getCoachModelInput(
+      userId,
+      messages
+    );
 
     const result = streamText({
       model: anthropic(modelId),
-      system: systemWithProfile,
+      system,
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(24),
     });
 
+    const coachDebug = isCoachAiDebugEnabled();
+
     return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (!coachDebug) return undefined;
+        if (part.type === "finish") {
+          const u = part.totalUsage;
+          return {
+            coachAiUsage: {
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              totalTokens: u.totalTokens,
+            },
+          };
+        }
+        if (part.type === "finish-step") {
+          const u = part.usage;
+          return {
+            coachAiUsage: {
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              totalTokens: u.totalTokens,
+            },
+          };
+        }
+        return undefined;
+      },
       onError: (error) => {
         console.error("[coach/chat] stream error:", error);
-        return isCoachAiDebugEnabled()
+        return coachDebug
           ? (debugErrorBody(error) ?? "Unknown stream error.")
           : USER_SAFE_ERROR;
       },

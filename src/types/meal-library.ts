@@ -1,4 +1,4 @@
-/** Serializable meal library row for client components (from `jsonMealLibraryItem`). */
+/** Serializable recipe library row for client components (from `jsonMealLibraryItem`). */
 export type MealLibraryItemJson = {
   id: string;
   name: string;

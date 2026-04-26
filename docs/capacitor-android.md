@@ -1,4 +1,4 @@
-# Capacitor Android (Trainlog)
+# Capacitor Android (PlateChat)
 
 The Android app **bundles the TanStack Start SPA build** (`dist/client/`) and
 boots from disk, so the app works fully offline in airplane mode from a cold

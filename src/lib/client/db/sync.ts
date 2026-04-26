@@ -10,10 +10,13 @@
  * back in — if local is still dirtier than what came back (the user wrote
  * again between push and response), we keep local and retry next tick.
  *
- * A heartbeat + online/focus event listeners poke the runner. Writes also
- * call `triggerSync()` so pushes don't wait for the poll interval.
+ * A heartbeat + online/focus/visibility event listeners poke the runner. Writes also
+ * call `triggerSync()` so pushes don't wait for the poll interval. Pull on
+ * `visibilitychange` (visible) covers mobile and background tabs where `focus`
+ * may not fire when the user returns after the coach updated server data.
  */
 import type { Table } from "dexie";
+import { isDevForceOffline } from "@/lib/client/dev-force-offline";
 import { authFetch } from "@/lib/client/auth-fetch";
 import {
   collectionNames,
@@ -21,6 +24,25 @@ import {
   primaryKeyByCollection,
   type CollectionName,
 } from "@/shared/schemas/collections";
+
+/**
+ * Collections that reference rows in other synced tables. If any listed parent
+ * had dirty rows and its push failed this cycle (`!res.ok`), we skip pushing
+ * the child so SQLite FK checks do not run before parents land on the server.
+ */
+const collectionParents: Partial<
+  Record<CollectionName, readonly CollectionName[]>
+> = {
+  workoutTemplateItems: ["workoutTemplates", "exercises"],
+  workoutSets: ["workoutSessions", "exercises"],
+  workoutSessionExercisePrefs: ["workoutSessions", "exercises"],
+  workoutScheduledItems: ["workoutTemplates"],
+  workoutRecurringSkips: ["workoutRecurringRules"],
+  mealEntries: ["meals"],
+  mealLibraryIngredients: ["mealLibraryItems"],
+  mealPlanSlots: ["mealPlans", "mealLibraryItems"],
+  workoutTemplates: ["workoutRoutineGroups"],
+};
 import { getDb, type SyncedRow, type TrainlogDB } from "./database";
 
 interface Checkpoint {
@@ -36,10 +58,60 @@ let started = false;
 let cycleInFlight: Promise<void> | null = null;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
 
+const syncStateListeners = new Set<() => void>();
+
+function notifySyncStateChanged() {
+  for (const l of syncStateListeners) l();
+}
+
+/** For `useSyncExternalStore` / header sync indicator. */
+export function getSyncingSnapshot(): boolean {
+  return cycleInFlight != null;
+}
+
+export function subscribeSyncing(onChange: () => void): () => void {
+  syncStateListeners.add(onChange);
+  return () => syncStateListeners.delete(onChange);
+}
+
 export function triggerSync() {
   runCycle().catch((err) => {
     if (import.meta.env?.DEV) console.warn("[sync] cycle failed", err);
   });
+}
+
+function triggerSyncWhenDocumentVisible() {
+  if (typeof document === "undefined") return;
+  if (document.visibilityState === "visible") triggerSync();
+}
+
+function triggerSyncOnPageShow(ev: PageTransitionEvent) {
+  if (ev.persisted) triggerSync();
+}
+
+/**
+ * Pull one collection from the beginning (clears local sync cursor first).
+ * Use to recover after server pull semantics change, e.g. preset exercises
+ * with null `userId` that were previously never sent on incremental sync.
+ */
+export async function pullSyncCollectionFromScratch(
+  name: CollectionName
+): Promise<void> {
+  if (pullOnlyCollections.has(name)) return;
+  const db = getDb();
+  await db._sync.delete(name);
+  await pullCollection(db, name);
+}
+
+/** Incremental pull for a subset of collections (push is not run). */
+export async function pullSyncCollections(
+  names: readonly CollectionName[]
+): Promise<void> {
+  const db = getDb();
+  for (const name of names) {
+    if (pullOnlyCollections.has(name)) continue;
+    await pullCollection(db, name);
+  }
 }
 
 export function startSyncRunner() {
@@ -49,6 +121,8 @@ export function startSyncRunner() {
   if (typeof window !== "undefined") {
     window.addEventListener("online", triggerSync);
     window.addEventListener("focus", triggerSync);
+    window.addEventListener("pageshow", triggerSyncOnPageShow);
+    document.addEventListener("visibilitychange", triggerSyncWhenDocumentVisible);
   }
   triggerSync();
 }
@@ -61,24 +135,40 @@ export function stopSyncRunner() {
   if (typeof window !== "undefined") {
     window.removeEventListener("online", triggerSync);
     window.removeEventListener("focus", triggerSync);
+    window.removeEventListener("pageshow", triggerSyncOnPageShow);
+    document.removeEventListener(
+      "visibilitychange",
+      triggerSyncWhenDocumentVisible
+    );
   }
 }
+
+type PushOutcome = "no_dirty" | "ok" | "failed";
 
 async function runCycle(): Promise<void> {
   if (cycleInFlight) return cycleInFlight;
   cycleInFlight = (async () => {
-    const db = getDb();
     try {
+      if (isDevForceOffline()) return;
+      const db = getDb();
+      const pushFailed = new Set<CollectionName>();
       for (const name of collectionNames) {
-        await pushCollection(db, name);
+        const parents = collectionParents[name];
+        if (parents?.some((p) => pushFailed.has(p))) {
+          continue;
+        }
+        const outcome = await pushCollection(db, name);
+        if (outcome === "failed") pushFailed.add(name);
       }
       for (const name of collectionNames) {
         await pullCollection(db, name);
       }
     } finally {
       cycleInFlight = null;
+      notifySyncStateChanged();
     }
   })();
+  notifySyncStateChanged();
   return cycleInFlight;
 }
 
@@ -160,13 +250,13 @@ async function mergeIncoming(
 async function pushCollection(
   db: TrainlogDB,
   name: CollectionName
-): Promise<void> {
-  if (pullOnlyCollections.has(name)) return;
+): Promise<PushOutcome> {
+  if (pullOnlyCollections.has(name)) return "no_dirty";
   const pk = primaryKeyByCollection[name];
   const table = tableOf(db, name);
 
   const dirty = await table.where("_dirty").equals(1).toArray();
-  if (dirty.length === 0) return;
+  if (dirty.length === 0) return "no_dirty";
 
   for (let i = 0; i < dirty.length; i += PUSH_BATCH) {
     const chunk = dirty.slice(i, i + PUSH_BATCH);
@@ -182,7 +272,7 @@ async function pushCollection(
       if (import.meta.env?.DEV) {
         console.warn(`[sync:${name}] push failed ${res.status}`);
       }
-      return;
+      return "failed";
     }
     const body = (await res.json()) as {
       applied: Array<Record<string, unknown>>;
@@ -195,6 +285,7 @@ async function pushCollection(
       }
     });
   }
+  return "ok";
 }
 
 function stripClientMeta(row: SyncedRow): Record<string, unknown> {

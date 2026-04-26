@@ -10,7 +10,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const config: CapacitorConfig = {
   appId: "com.trainlog.app",
-  appName: "Trainlog",
+  appName: "PlateChat",
   webDir: "dist/client",
   android: {
     allowMixedContent: false,

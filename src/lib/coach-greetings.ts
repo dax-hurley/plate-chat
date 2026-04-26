@@ -1,3 +1,5 @@
+import { APP_BRAND_NAME } from "./brand";
+
 /** Stable index 0..n-1 from a string (same input → same pick across renders). */
 function bucketFromId(id: string, modulo: number): number {
   if (modulo <= 0) return 0;
@@ -11,14 +13,14 @@ function bucketFromId(id: string, modulo: number): number {
 
 const NEW_CHAT_SUBTITLES = [
   "Your AI Personal Trainer",
-  "Training, nutrition, and your Trainlog context",
+  `Training, nutrition, and your ${APP_BRAND_NAME} context`,
   "Ready when you are",
   "Let's make the next session count",
   "Here to help you train smarter",
 ] as const;
 
 const EMPTY_STATE_LEADS = [
-  "Ask anything about training, recovery, or what you're logging in Trainlog.",
+  `Ask anything about training, recovery, or what you're logging in ${APP_BRAND_NAME}.`,
   "Wondering about programming, form, or fueling your workouts? Start here.",
   "I can use your workouts, meals, and vitals—ask me anything.",
   "Stuck on a plateau, a meal plan, or rest days? Pick a topic below or type your own.",

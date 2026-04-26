@@ -61,6 +61,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            urlPattern: /^\/api\/health$/,
+            handler: "NetworkOnly",
+          },
+          {
             urlPattern: /^\/api\/sync\//,
             handler: "NetworkOnly",
           },

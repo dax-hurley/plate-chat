@@ -16,25 +16,34 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppProgressRouteImport } from './routes/app/progress'
 import { Route as AppProfileRouteImport } from './routes/app/profile'
+import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as AppCalendarRouteImport } from './routes/app/calendar'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AppWorkoutsRouteRouteImport } from './routes/app/workouts/route'
 import { Route as AppNutritionRouteRouteImport } from './routes/app/nutrition/route'
 import { Route as AppCoachRouteRouteImport } from './routes/app/coach/route'
 import { Route as AppWorkoutsIndexRouteImport } from './routes/app/workouts/index'
 import { Route as AppNutritionIndexRouteImport } from './routes/app/nutrition/index'
 import { Route as AppCoachIndexRouteImport } from './routes/app/coach/index'
+import { Route as AppWorkoutsNewRouteImport } from './routes/app/workouts/new'
 import { Route as AppWorkoutsCalendarRouteImport } from './routes/app/workouts/calendar'
 import { Route as AppWorkoutsIdRouteImport } from './routes/app/workouts/$id'
 import { Route as AppNutritionPlanRouteImport } from './routes/app/nutrition/plan'
 import { Route as AppNutritionLibraryRouteImport } from './routes/app/nutrition/library'
-import { Route as AppCoachIdRouteImport } from './routes/app/coach/$id'
+import { Route as ApiUserProfileRouteImport } from './routes/api/user/profile'
 import { Route as ApiSyncCollectionRouteImport } from './routes/api/sync/$collection'
+import { Route as ApiOnboardingChatRouteImport } from './routes/api/onboarding/chat'
+import { Route as ApiNutritionImportRecipeUrlRouteImport } from './routes/api/nutrition/import-recipe-url'
+import { Route as ApiCoachConversationsRouteImport } from './routes/api/coach/conversations'
+import { Route as ApiCoachConversationTitleRouteImport } from './routes/api/coach/conversation-title'
+import { Route as ApiCoachContextPreviewRouteImport } from './routes/api/coach/context-preview'
 import { Route as ApiCoachChatRouteImport } from './routes/api/coach/chat'
 import { Route as ApiAuthRefreshRouteImport } from './routes/api/auth/refresh'
 import { Route as ApiAuthDeviceTokensRouteImport } from './routes/api/auth/device-tokens'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppWorkoutsSessionSessionIdRouteImport } from './routes/app/workouts/session.$sessionId'
 import { Route as ApiNutritionMealPlanShoppingListRouteImport } from './routes/api/nutrition/meal-plan/shopping-list'
+import { Route as ApiCoachConversationsIdRouteImport } from './routes/api/coach/conversations.$id'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -71,10 +80,20 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppCalendarRoute = AppCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
   getParentRoute: () => AppRouteRoute,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppWorkoutsRouteRoute = AppWorkoutsRouteRouteImport.update({
   id: '/workouts',
@@ -106,6 +125,11 @@ const AppCoachIndexRoute = AppCoachIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppCoachRouteRoute,
 } as any)
+const AppWorkoutsNewRoute = AppWorkoutsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppWorkoutsRouteRoute,
+} as any)
 const AppWorkoutsCalendarRoute = AppWorkoutsCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -126,14 +150,41 @@ const AppNutritionLibraryRoute = AppNutritionLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AppNutritionRouteRoute,
 } as any)
-const AppCoachIdRoute = AppCoachIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppCoachRouteRoute,
+const ApiUserProfileRoute = ApiUserProfileRouteImport.update({
+  id: '/api/user/profile',
+  path: '/api/user/profile',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSyncCollectionRoute = ApiSyncCollectionRouteImport.update({
   id: '/api/sync/$collection',
   path: '/api/sync/$collection',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOnboardingChatRoute = ApiOnboardingChatRouteImport.update({
+  id: '/api/onboarding/chat',
+  path: '/api/onboarding/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiNutritionImportRecipeUrlRoute =
+  ApiNutritionImportRecipeUrlRouteImport.update({
+    id: '/api/nutrition/import-recipe-url',
+    path: '/api/nutrition/import-recipe-url',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCoachConversationsRoute = ApiCoachConversationsRouteImport.update({
+  id: '/api/coach/conversations',
+  path: '/api/coach/conversations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCoachConversationTitleRoute =
+  ApiCoachConversationTitleRouteImport.update({
+    id: '/api/coach/conversation-title',
+    path: '/api/coach/conversation-title',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCoachContextPreviewRoute = ApiCoachContextPreviewRouteImport.update({
+  id: '/api/coach/context-preview',
+  path: '/api/coach/context-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCoachChatRoute = ApiCoachChatRouteImport.update({
@@ -168,6 +219,11 @@ const ApiNutritionMealPlanShoppingListRoute =
     path: '/api/nutrition/meal-plan/shopping-list',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCoachConversationsIdRoute = ApiCoachConversationsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiCoachConversationsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -177,7 +233,9 @@ export interface FileRoutesByFullPath {
   '/app/coach': typeof AppCoachRouteRouteWithChildren
   '/app/nutrition': typeof AppNutritionRouteRouteWithChildren
   '/app/workouts': typeof AppWorkoutsRouteRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
   '/app/calendar': typeof AppCalendarRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/': typeof AppIndexRoute
@@ -185,15 +243,22 @@ export interface FileRoutesByFullPath {
   '/api/auth/device-tokens': typeof ApiAuthDeviceTokensRoute
   '/api/auth/refresh': typeof ApiAuthRefreshRoute
   '/api/coach/chat': typeof ApiCoachChatRoute
+  '/api/coach/context-preview': typeof ApiCoachContextPreviewRoute
+  '/api/coach/conversation-title': typeof ApiCoachConversationTitleRoute
+  '/api/coach/conversations': typeof ApiCoachConversationsRouteWithChildren
+  '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
+  '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
-  '/app/coach/$id': typeof AppCoachIdRoute
+  '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
   '/app/workouts/$id': typeof AppWorkoutsIdRoute
   '/app/workouts/calendar': typeof AppWorkoutsCalendarRoute
+  '/app/workouts/new': typeof AppWorkoutsNewRoute
   '/app/coach/': typeof AppCoachIndexRoute
   '/app/nutrition/': typeof AppNutritionIndexRoute
   '/app/workouts/': typeof AppWorkoutsIndexRoute
+  '/api/coach/conversations/$id': typeof ApiCoachConversationsIdRoute
   '/api/nutrition/meal-plan/shopping-list': typeof ApiNutritionMealPlanShoppingListRoute
   '/app/workouts/session/$sessionId': typeof AppWorkoutsSessionSessionIdRoute
 }
@@ -201,7 +266,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/api/health': typeof ApiHealthRoute
   '/app/calendar': typeof AppCalendarRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app': typeof AppIndexRoute
@@ -209,15 +276,22 @@ export interface FileRoutesByTo {
   '/api/auth/device-tokens': typeof ApiAuthDeviceTokensRoute
   '/api/auth/refresh': typeof ApiAuthRefreshRoute
   '/api/coach/chat': typeof ApiCoachChatRoute
+  '/api/coach/context-preview': typeof ApiCoachContextPreviewRoute
+  '/api/coach/conversation-title': typeof ApiCoachConversationTitleRoute
+  '/api/coach/conversations': typeof ApiCoachConversationsRouteWithChildren
+  '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
+  '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
-  '/app/coach/$id': typeof AppCoachIdRoute
+  '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
   '/app/workouts/$id': typeof AppWorkoutsIdRoute
   '/app/workouts/calendar': typeof AppWorkoutsCalendarRoute
+  '/app/workouts/new': typeof AppWorkoutsNewRoute
   '/app/coach': typeof AppCoachIndexRoute
   '/app/nutrition': typeof AppNutritionIndexRoute
   '/app/workouts': typeof AppWorkoutsIndexRoute
+  '/api/coach/conversations/$id': typeof ApiCoachConversationsIdRoute
   '/api/nutrition/meal-plan/shopping-list': typeof ApiNutritionMealPlanShoppingListRoute
   '/app/workouts/session/$sessionId': typeof AppWorkoutsSessionSessionIdRoute
 }
@@ -230,7 +304,9 @@ export interface FileRoutesById {
   '/app/coach': typeof AppCoachRouteRouteWithChildren
   '/app/nutrition': typeof AppNutritionRouteRouteWithChildren
   '/app/workouts': typeof AppWorkoutsRouteRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
   '/app/calendar': typeof AppCalendarRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/': typeof AppIndexRoute
@@ -238,15 +314,22 @@ export interface FileRoutesById {
   '/api/auth/device-tokens': typeof ApiAuthDeviceTokensRoute
   '/api/auth/refresh': typeof ApiAuthRefreshRoute
   '/api/coach/chat': typeof ApiCoachChatRoute
+  '/api/coach/context-preview': typeof ApiCoachContextPreviewRoute
+  '/api/coach/conversation-title': typeof ApiCoachConversationTitleRoute
+  '/api/coach/conversations': typeof ApiCoachConversationsRouteWithChildren
+  '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
+  '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
-  '/app/coach/$id': typeof AppCoachIdRoute
+  '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
   '/app/workouts/$id': typeof AppWorkoutsIdRoute
   '/app/workouts/calendar': typeof AppWorkoutsCalendarRoute
+  '/app/workouts/new': typeof AppWorkoutsNewRoute
   '/app/coach/': typeof AppCoachIndexRoute
   '/app/nutrition/': typeof AppNutritionIndexRoute
   '/app/workouts/': typeof AppWorkoutsIndexRoute
+  '/api/coach/conversations/$id': typeof ApiCoachConversationsIdRoute
   '/api/nutrition/meal-plan/shopping-list': typeof ApiNutritionMealPlanShoppingListRoute
   '/app/workouts/session/$sessionId': typeof AppWorkoutsSessionSessionIdRoute
 }
@@ -260,7 +343,9 @@ export interface FileRouteTypes {
     | '/app/coach'
     | '/app/nutrition'
     | '/app/workouts'
+    | '/api/health'
     | '/app/calendar'
+    | '/app/onboarding'
     | '/app/profile'
     | '/app/progress'
     | '/app/'
@@ -268,15 +353,22 @@ export interface FileRouteTypes {
     | '/api/auth/device-tokens'
     | '/api/auth/refresh'
     | '/api/coach/chat'
+    | '/api/coach/context-preview'
+    | '/api/coach/conversation-title'
+    | '/api/coach/conversations'
+    | '/api/nutrition/import-recipe-url'
+    | '/api/onboarding/chat'
     | '/api/sync/$collection'
-    | '/app/coach/$id'
+    | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
     | '/app/workouts/$id'
     | '/app/workouts/calendar'
+    | '/app/workouts/new'
     | '/app/coach/'
     | '/app/nutrition/'
     | '/app/workouts/'
+    | '/api/coach/conversations/$id'
     | '/api/nutrition/meal-plan/shopping-list'
     | '/app/workouts/session/$sessionId'
   fileRoutesByTo: FileRoutesByTo
@@ -284,7 +376,9 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/api/health'
     | '/app/calendar'
+    | '/app/onboarding'
     | '/app/profile'
     | '/app/progress'
     | '/app'
@@ -292,15 +386,22 @@ export interface FileRouteTypes {
     | '/api/auth/device-tokens'
     | '/api/auth/refresh'
     | '/api/coach/chat'
+    | '/api/coach/context-preview'
+    | '/api/coach/conversation-title'
+    | '/api/coach/conversations'
+    | '/api/nutrition/import-recipe-url'
+    | '/api/onboarding/chat'
     | '/api/sync/$collection'
-    | '/app/coach/$id'
+    | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
     | '/app/workouts/$id'
     | '/app/workouts/calendar'
+    | '/app/workouts/new'
     | '/app/coach'
     | '/app/nutrition'
     | '/app/workouts'
+    | '/api/coach/conversations/$id'
     | '/api/nutrition/meal-plan/shopping-list'
     | '/app/workouts/session/$sessionId'
   id:
@@ -312,7 +413,9 @@ export interface FileRouteTypes {
     | '/app/coach'
     | '/app/nutrition'
     | '/app/workouts'
+    | '/api/health'
     | '/app/calendar'
+    | '/app/onboarding'
     | '/app/profile'
     | '/app/progress'
     | '/app/'
@@ -320,15 +423,22 @@ export interface FileRouteTypes {
     | '/api/auth/device-tokens'
     | '/api/auth/refresh'
     | '/api/coach/chat'
+    | '/api/coach/context-preview'
+    | '/api/coach/conversation-title'
+    | '/api/coach/conversations'
+    | '/api/nutrition/import-recipe-url'
+    | '/api/onboarding/chat'
     | '/api/sync/$collection'
-    | '/app/coach/$id'
+    | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
     | '/app/workouts/$id'
     | '/app/workouts/calendar'
+    | '/app/workouts/new'
     | '/app/coach/'
     | '/app/nutrition/'
     | '/app/workouts/'
+    | '/api/coach/conversations/$id'
     | '/api/nutrition/meal-plan/shopping-list'
     | '/app/workouts/session/$sessionId'
   fileRoutesById: FileRoutesById
@@ -338,11 +448,18 @@ export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAuthDeviceTokensRoute: typeof ApiAuthDeviceTokensRoute
   ApiAuthRefreshRoute: typeof ApiAuthRefreshRoute
   ApiCoachChatRoute: typeof ApiCoachChatRoute
+  ApiCoachContextPreviewRoute: typeof ApiCoachContextPreviewRoute
+  ApiCoachConversationTitleRoute: typeof ApiCoachConversationTitleRoute
+  ApiCoachConversationsRoute: typeof ApiCoachConversationsRouteWithChildren
+  ApiNutritionImportRecipeUrlRoute: typeof ApiNutritionImportRecipeUrlRoute
+  ApiOnboardingChatRoute: typeof ApiOnboardingChatRoute
   ApiSyncCollectionRoute: typeof ApiSyncCollectionRoute
+  ApiUserProfileRoute: typeof ApiUserProfileRoute
   ApiNutritionMealPlanShoppingListRoute: typeof ApiNutritionMealPlanShoppingListRoute
 }
 
@@ -397,12 +514,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/onboarding': {
+      id: '/app/onboarding'
+      path: '/onboarding'
+      fullPath: '/app/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/calendar': {
       id: '/app/calendar'
       path: '/calendar'
       fullPath: '/app/calendar'
       preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/workouts': {
       id: '/app/workouts'
@@ -446,6 +577,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCoachIndexRouteImport
       parentRoute: typeof AppCoachRouteRoute
     }
+    '/app/workouts/new': {
+      id: '/app/workouts/new'
+      path: '/new'
+      fullPath: '/app/workouts/new'
+      preLoaderRoute: typeof AppWorkoutsNewRouteImport
+      parentRoute: typeof AppWorkoutsRouteRoute
+    }
     '/app/workouts/calendar': {
       id: '/app/workouts/calendar'
       path: '/calendar'
@@ -474,18 +612,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNutritionLibraryRouteImport
       parentRoute: typeof AppNutritionRouteRoute
     }
-    '/app/coach/$id': {
-      id: '/app/coach/$id'
-      path: '/$id'
-      fullPath: '/app/coach/$id'
-      preLoaderRoute: typeof AppCoachIdRouteImport
-      parentRoute: typeof AppCoachRouteRoute
+    '/api/user/profile': {
+      id: '/api/user/profile'
+      path: '/api/user/profile'
+      fullPath: '/api/user/profile'
+      preLoaderRoute: typeof ApiUserProfileRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/sync/$collection': {
       id: '/api/sync/$collection'
       path: '/api/sync/$collection'
       fullPath: '/api/sync/$collection'
       preLoaderRoute: typeof ApiSyncCollectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/onboarding/chat': {
+      id: '/api/onboarding/chat'
+      path: '/api/onboarding/chat'
+      fullPath: '/api/onboarding/chat'
+      preLoaderRoute: typeof ApiOnboardingChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/nutrition/import-recipe-url': {
+      id: '/api/nutrition/import-recipe-url'
+      path: '/api/nutrition/import-recipe-url'
+      fullPath: '/api/nutrition/import-recipe-url'
+      preLoaderRoute: typeof ApiNutritionImportRecipeUrlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/coach/conversations': {
+      id: '/api/coach/conversations'
+      path: '/api/coach/conversations'
+      fullPath: '/api/coach/conversations'
+      preLoaderRoute: typeof ApiCoachConversationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/coach/conversation-title': {
+      id: '/api/coach/conversation-title'
+      path: '/api/coach/conversation-title'
+      fullPath: '/api/coach/conversation-title'
+      preLoaderRoute: typeof ApiCoachConversationTitleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/coach/context-preview': {
+      id: '/api/coach/context-preview'
+      path: '/api/coach/context-preview'
+      fullPath: '/api/coach/context-preview'
+      preLoaderRoute: typeof ApiCoachContextPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/coach/chat': {
@@ -530,16 +703,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiNutritionMealPlanShoppingListRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/coach/conversations/$id': {
+      id: '/api/coach/conversations/$id'
+      path: '/$id'
+      fullPath: '/api/coach/conversations/$id'
+      preLoaderRoute: typeof ApiCoachConversationsIdRouteImport
+      parentRoute: typeof ApiCoachConversationsRoute
+    }
   }
 }
 
 interface AppCoachRouteRouteChildren {
-  AppCoachIdRoute: typeof AppCoachIdRoute
   AppCoachIndexRoute: typeof AppCoachIndexRoute
 }
 
 const AppCoachRouteRouteChildren: AppCoachRouteRouteChildren = {
-  AppCoachIdRoute: AppCoachIdRoute,
   AppCoachIndexRoute: AppCoachIndexRoute,
 }
 
@@ -565,6 +743,7 @@ const AppNutritionRouteRouteWithChildren =
 interface AppWorkoutsRouteRouteChildren {
   AppWorkoutsIdRoute: typeof AppWorkoutsIdRoute
   AppWorkoutsCalendarRoute: typeof AppWorkoutsCalendarRoute
+  AppWorkoutsNewRoute: typeof AppWorkoutsNewRoute
   AppWorkoutsIndexRoute: typeof AppWorkoutsIndexRoute
   AppWorkoutsSessionSessionIdRoute: typeof AppWorkoutsSessionSessionIdRoute
 }
@@ -572,6 +751,7 @@ interface AppWorkoutsRouteRouteChildren {
 const AppWorkoutsRouteRouteChildren: AppWorkoutsRouteRouteChildren = {
   AppWorkoutsIdRoute: AppWorkoutsIdRoute,
   AppWorkoutsCalendarRoute: AppWorkoutsCalendarRoute,
+  AppWorkoutsNewRoute: AppWorkoutsNewRoute,
   AppWorkoutsIndexRoute: AppWorkoutsIndexRoute,
   AppWorkoutsSessionSessionIdRoute: AppWorkoutsSessionSessionIdRoute,
 }
@@ -584,6 +764,7 @@ interface AppRouteRouteChildren {
   AppNutritionRouteRoute: typeof AppNutritionRouteRouteWithChildren
   AppWorkoutsRouteRoute: typeof AppWorkoutsRouteRouteWithChildren
   AppCalendarRoute: typeof AppCalendarRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
   AppProgressRoute: typeof AppProgressRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -594,6 +775,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppNutritionRouteRoute: AppNutritionRouteRouteWithChildren,
   AppWorkoutsRouteRoute: AppWorkoutsRouteRouteWithChildren,
   AppCalendarRoute: AppCalendarRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
   AppProgressRoute: AppProgressRoute,
   AppIndexRoute: AppIndexRoute,
@@ -603,16 +785,36 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
   AppRouteRouteChildren,
 )
 
+interface ApiCoachConversationsRouteChildren {
+  ApiCoachConversationsIdRoute: typeof ApiCoachConversationsIdRoute
+}
+
+const ApiCoachConversationsRouteChildren: ApiCoachConversationsRouteChildren = {
+  ApiCoachConversationsIdRoute: ApiCoachConversationsIdRoute,
+}
+
+const ApiCoachConversationsRouteWithChildren =
+  ApiCoachConversationsRoute._addFileChildren(
+    ApiCoachConversationsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAuthDeviceTokensRoute: ApiAuthDeviceTokensRoute,
   ApiAuthRefreshRoute: ApiAuthRefreshRoute,
   ApiCoachChatRoute: ApiCoachChatRoute,
+  ApiCoachContextPreviewRoute: ApiCoachContextPreviewRoute,
+  ApiCoachConversationTitleRoute: ApiCoachConversationTitleRoute,
+  ApiCoachConversationsRoute: ApiCoachConversationsRouteWithChildren,
+  ApiNutritionImportRecipeUrlRoute: ApiNutritionImportRecipeUrlRoute,
+  ApiOnboardingChatRoute: ApiOnboardingChatRoute,
   ApiSyncCollectionRoute: ApiSyncCollectionRoute,
+  ApiUserProfileRoute: ApiUserProfileRoute,
   ApiNutritionMealPlanShoppingListRoute: ApiNutritionMealPlanShoppingListRoute,
 }
 export const routeTree = rootRouteImport

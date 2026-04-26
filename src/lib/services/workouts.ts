@@ -349,6 +349,15 @@ export async function createExercise(
   return row;
 }
 
+function normalizeRestBetweenSetsSec(
+  v: number | null | undefined
+): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  const n = Math.round(Number(v));
+  if (n <= 0) return null;
+  return Math.min(n, 3600);
+}
+
 export async function createTemplate(
   userId: string,
   input: { name: string; notes?: string }
@@ -362,6 +371,54 @@ export async function createTemplate(
     })
     .returning();
   return row;
+}
+
+/**
+ * Update saved workout metadata (partial). Omitted fields are unchanged.
+ */
+export async function updateWorkoutTemplate(
+  userId: string,
+  templateId: string,
+  input: {
+    name?: string;
+    notes?: string | null;
+  }
+) {
+  const t = await getTemplate(userId, templateId);
+  if (!t) throw new Error("Template not found");
+
+  const set: {
+    name?: string;
+    notes?: string | null;
+  } = {};
+
+  if (input.name !== undefined) {
+    const n = input.name.trim();
+    if (!n) throw new Error("Name required");
+    set.name = n;
+  }
+  if (input.notes !== undefined) {
+    set.notes =
+      input.notes === null || String(input.notes).trim() === ""
+        ? null
+        : String(input.notes).trim();
+  }
+
+  if (Object.keys(set).length === 0) return t;
+
+  await db
+    .update(workoutTemplates)
+    .set(set)
+    .where(
+      and(
+        eq(workoutTemplates.id, templateId),
+        eq(workoutTemplates.userId, userId)
+      )
+    );
+
+  const next = await getTemplate(userId, templateId);
+  if (!next) throw new Error("Template not found");
+  return next;
 }
 
 export async function addTemplateItem(
@@ -384,6 +441,10 @@ export async function addTemplateItem(
     trackWeight?: boolean;
     /** Distance exercises only: log stopwatch time instead of distance. */
     logTimeForDistanceSets?: boolean;
+    /** Session list: Warmup tab vs main workout. */
+    isWarmup?: boolean;
+    /** Between-set rest (seconds) for this line; omit/null = no countdown. */
+    restBetweenSetsSec?: number | null;
   }
 ) {
   const t = await getTemplate(userId, input.templateId);
@@ -448,6 +509,7 @@ export async function addTemplateItem(
   const [row] = await db
     .insert(workoutTemplateItems)
     .values({
+      userId,
       templateId: input.templateId,
       exerciseId: input.exerciseId,
       order: input.order,
@@ -470,6 +532,10 @@ export async function addTemplateItem(
       progressiveOverloadRequireFullCompletion:
         input.progressiveOverloadRequireFullCompletion ?? false,
       logTimeForDistanceSets: logTimeFD,
+      isWarmup: input.isWarmup ?? false,
+      restBetweenSetsSec: normalizeRestBetweenSetsSec(
+        input.restBetweenSetsSec
+      ),
     })
     .returning();
   return row;
@@ -492,6 +558,8 @@ export async function appendTemplateItem(
     progressiveOverloadRequireFullCompletion?: boolean;
     trackWeight?: boolean;
     logTimeForDistanceSets?: boolean;
+    isWarmup?: boolean;
+    restBetweenSetsSec?: number | null;
   }
 ) {
   const t = await getTemplate(userId, input.templateId);
@@ -513,6 +581,8 @@ export async function appendTemplateItem(
       input.progressiveOverloadRequireFullCompletion,
     trackWeight: input.trackWeight,
     logTimeForDistanceSets: input.logTimeForDistanceSets,
+    isWarmup: input.isWarmup,
+    restBetweenSetsSec: input.restBetweenSetsSec,
   });
 }
 
@@ -531,6 +601,10 @@ export async function appendTemplateItemsBulk(
     progressiveOverloadEnabled?: boolean;
     progressiveOverloadIncrement?: number | null;
     progressiveOverloadRequireFullCompletion?: boolean;
+    trackWeight?: boolean;
+    logTimeForDistanceSets?: boolean;
+    isWarmup?: boolean;
+    restBetweenSetsSec?: number | null;
   }>
 ) {
   const tid = templateId.trim();
@@ -549,6 +623,10 @@ export async function appendTemplateItemsBulk(
       progressiveOverloadIncrement: i.progressiveOverloadIncrement,
       progressiveOverloadRequireFullCompletion:
         i.progressiveOverloadRequireFullCompletion,
+      trackWeight: i.trackWeight,
+      logTimeForDistanceSets: i.logTimeForDistanceSets,
+      isWarmup: i.isWarmup,
+      restBetweenSetsSec: i.restBetweenSetsSec,
     });
     out.push(row);
   }
@@ -589,6 +667,8 @@ export async function updateTemplateItem(
     progressiveOverloadRequireFullCompletion?: boolean;
     trackWeight?: boolean;
     logTimeForDistanceSets?: boolean;
+    isWarmup?: boolean;
+    restBetweenSetsSec?: number | null;
   }
 ) {
   const t = await getTemplate(userId, input.templateId);
@@ -708,6 +788,18 @@ export async function updateTemplateItem(
       ? {}
       : { logTimeForDistanceSets: Boolean(input.logTimeForDistanceSets) };
 
+  const warmupPatch =
+    input.isWarmup === undefined ? {} : { isWarmup: Boolean(input.isWarmup) };
+
+  const restPatch =
+    input.restBetweenSetsSec === undefined
+      ? {}
+      : {
+          restBetweenSetsSec: normalizeRestBetweenSetsSec(
+            input.restBetweenSetsSec
+          ),
+        };
+
   await db
     .update(workoutTemplateItems)
     .set({
@@ -720,6 +812,8 @@ export async function updateTemplateItem(
       ...progPatch,
       ...trackPatch,
       ...logTimePatch,
+      ...warmupPatch,
+      ...restPatch,
     })
     .where(
       and(
@@ -1327,6 +1421,7 @@ async function applyProgressiveOverloadAfterCompletedSession(
   for (const sessionItem of s.template.items) {
     const live = tmpl.items.find((i) => i.id === sessionItem.id);
     if (!live?.progressiveOverloadEnabled) continue;
+    if (live.isWarmup) continue;
     const inc = live.progressiveOverloadIncrement;
     if (inc == null || !Number.isFinite(inc) || inc <= 0) continue;
 

@@ -1,0 +1,1 @@
+import{u as e,r as t,n as o}from"./index-BNpnHG5H.js";function s(){const a=e();return t.useEffect(()=>{(async()=>(await o())?.userId?await a({to:"/app",replace:!0}):await a({to:"/login",replace:!0}))()},[a]),null}export{s as component};

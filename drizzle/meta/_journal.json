@@ -8,6 +8,48 @@
       "when": 1776896848711,
       "tag": "0000_absurd_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776906320442,
+      "tag": "0001_workout_rest_between_sets",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777000000000,
+      "tag": "0002_meal_plan_slot_sync_bump",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1777100000000,
+      "tag": "0003_user_profile_sync_bump",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777200000000,
+      "tag": "0004_template_item_warmup",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777300000000,
+      "tag": "0005_template_item_rest",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777400000000,
+      "tag": "0006_onboarding_profile_fields",
+      "breakpoints": true
     }
   ]
 }

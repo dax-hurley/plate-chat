@@ -210,6 +210,15 @@ export const workoutTemplateItems = sqliteTable(
     })
       .notNull()
       .default(false),
+    /** When true, the lift appears under the session Warmup tab instead of Workout. */
+    isWarmup: integer("isWarmup", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /**
+     * Rest after each logged set for this exercise (seconds). Null or 0
+     * disables the between-set countdown for this line in the active session.
+     */
+    restBetweenSetsSec: integer("restBetweenSetsSec"),
     ...syncCols,
   },
   (t) => [
@@ -563,10 +572,18 @@ export const userVitalEntries = sqliteTable(
   ]
 );
 
-/** Trainlog profile: height, goals, preferences (name lives on `users`). */
+/** PlateChat profile: height, goals, preferences (name lives on `users`). */
 export const userProfiles = sqliteTable("user_profiles", {
   userId: text("userId").primaryKey(),
   heightIn: real("heightIn"),
+  /** Profile sex value (snake_case; see `PROFILE_SEX_VALUES` in profile-demographics). */
+  sex: text("sex"),
+  /** `sedentary` | `light` | `moderate` | `active` | `very_active` */
+  activityLevel: text("activityLevel"),
+  /** Approximate age in years (optional). */
+  ageYears: integer("ageYears"),
+  /** When the user completed in-app onboarding; null = not completed. */
+  onboardingCompletedAt: integer("onboardingCompletedAt", { mode: "timestamp_ms" }),
   /** Primary goal tab: lose_weight | gain_muscle | build_strength | custom */
   goalPreset: text("goalPreset").notNull().default("custom"),
   fitnessGoals: text("fitnessGoals"),

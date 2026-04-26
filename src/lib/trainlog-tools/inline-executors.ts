@@ -15,6 +15,8 @@ import * as progress from "@/lib/services/progress";
 import * as workouts from "@/lib/services/workouts";
 
 import { parseExerciseLogKind } from "@/lib/log-kind";
+import { stripRecipeMarkdownImagesAndLinks } from "@/lib/recipe-markdown-strip";
+import { scrapeUrlToMarkdown } from "@/lib/services/firecrawl-scrape";
 
 import {
   parseTrainlogToolInput,
@@ -40,7 +42,29 @@ export async function runTrainlogToolInline(
         name: n.trim(),
         notes: notes?.trim(),
       });
-      return { id: row.id, name: row.name, notes: row.notes };
+      return {
+        id: row.id,
+        name: row.name,
+        notes: row.notes,
+      };
+    }
+
+    case "update_workout_template": {
+      const { templateId, name, notes } = input as {
+        templateId: string;
+        name?: string;
+        notes?: string | null;
+      };
+      const row = await workouts.updateWorkoutTemplate(
+        userId,
+        templateId.trim(),
+        { name, notes }
+      );
+      return {
+        id: row.id,
+        name: row.name,
+        notes: row.notes,
+      };
     }
 
     case "list_exercises": {
@@ -112,6 +136,8 @@ export async function runTrainlogToolInline(
         progressiveOverloadEnabled?: boolean;
         progressiveOverloadIncrement?: number | null;
         progressiveOverloadRequireFullCompletion?: boolean;
+        isWarmup?: boolean;
+        restBetweenSetsSec?: number;
       };
       const row = await workouts.appendTemplateItem(userId, {
         templateId: i.templateId.trim(),
@@ -126,6 +152,8 @@ export async function runTrainlogToolInline(
         progressiveOverloadIncrement: i.progressiveOverloadIncrement,
         progressiveOverloadRequireFullCompletion:
           i.progressiveOverloadRequireFullCompletion,
+        isWarmup: i.isWarmup,
+        restBetweenSetsSec: i.restBetweenSetsSec,
       });
       return {
         itemId: row.id,
@@ -142,6 +170,8 @@ export async function runTrainlogToolInline(
         progressiveOverloadIncrement: row.progressiveOverloadIncrement,
         progressiveOverloadRequireFullCompletion:
           row.progressiveOverloadRequireFullCompletion,
+        isWarmup: row.isWarmup,
+        restBetweenSetsSec: row.restBetweenSetsSec,
       };
     }
 
@@ -159,6 +189,8 @@ export async function runTrainlogToolInline(
           progressiveOverloadEnabled?: boolean;
           progressiveOverloadIncrement?: number | null;
           progressiveOverloadRequireFullCompletion?: boolean;
+          isWarmup?: boolean;
+          restBetweenSetsSec?: number;
         }>;
       };
       const rows = await workouts.appendTemplateItemsBulk(
@@ -176,6 +208,8 @@ export async function runTrainlogToolInline(
           progressiveOverloadIncrement: i.progressiveOverloadIncrement,
           progressiveOverloadRequireFullCompletion:
             i.progressiveOverloadRequireFullCompletion,
+          isWarmup: i.isWarmup,
+          restBetweenSetsSec: i.restBetweenSetsSec,
         }))
       );
       return {
@@ -194,6 +228,8 @@ export async function runTrainlogToolInline(
           progressiveOverloadIncrement: row.progressiveOverloadIncrement,
           progressiveOverloadRequireFullCompletion:
             row.progressiveOverloadRequireFullCompletion,
+          isWarmup: row.isWarmup,
+          restBetweenSetsSec: row.restBetweenSetsSec,
         })),
       };
     }
@@ -579,6 +615,9 @@ export async function runTrainlogToolInline(
       const p = input as {
         name?: string | null;
         heightIn?: number | null;
+        sex?: string | null;
+        activityLevel?: string | null;
+        ageYears?: number | null;
         goalPreset?: string | null;
         fitnessGoals?: string | null;
         preferences?: string | null;
@@ -646,6 +685,23 @@ export async function runTrainlogToolInline(
         carbsG: inp.carbsG ?? 0,
         fatG: inp.fatG ?? 0,
       });
+    }
+
+    case "scrape_recipe_url": {
+      const { url } = input as { url: string };
+      const result = await scrapeUrlToMarkdown(url);
+      if (!result.ok) {
+        return {
+          error: result.error,
+          ...(result.status !== undefined ? { httpStatus: result.status } : {}),
+        };
+      }
+      return {
+        sourceUrl: result.sourceUrl,
+        markdown: stripRecipeMarkdownImagesAndLinks(result.markdown),
+        pageTitle: result.title,
+        truncated: result.truncated,
+      };
     }
 
     case "list_meal_library": {

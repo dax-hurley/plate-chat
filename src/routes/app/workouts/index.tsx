@@ -1,196 +1,201 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { ClipboardList, Plus, Sparkles } from "lucide-react";
+
+import { COACH_CREATE_WORKOUT_OR_ROUTINE_PROMPT } from "@/lib/coach-create-workout-prompt";
+
+import { WorkoutRoutineGroupHeader } from "@/components/app/workout-routine-group-header";
+import { WorkoutRoutineOrderButtons } from "@/components/app/workout-routine-order-buttons";
+import { WorkoutTemplateLibraryCard } from "@/components/app/workout-template-library-card";
+import { buttonVariants } from "@/components/ui/button";
+import { useDb } from "@/lib/client/db/provider";
+import { useLiveArray } from "@/lib/client/db/hooks";
 import {
-  useWorkoutTemplates,
   useRoutineGroups,
-  useActiveSession,
-  useWorkoutMutations,
-} from "@/lib/stores/workouts";
+  useWorkoutTemplates,
+  type WorkoutTemplate,
+  useLocalSession,
+} from "@/lib/stores";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/workouts/")({
-  component: WorkoutsIndex,
+  component: WorkoutsPage,
 });
 
-function WorkoutsIndex() {
-  const navigate = useNavigate();
-  const { data: templates, loading } = useWorkoutTemplates();
-  const { data: groups } = useRoutineGroups();
-  const { data: active } = useActiveSession();
-  const { createRoutineGroup, createTemplate, startSession, deleteTemplate } =
-    useWorkoutMutations();
-  const [groupName, setGroupName] = useState("");
-  const [newName, setNewName] = useState("");
-
-  if (loading) return <p className="text-muted-foreground">Loading…</p>;
-
-  const grouped = new Map<string | null, typeof templates>();
-  for (const t of templates) {
-    const key = t.routineGroupId ?? null;
-    const arr = grouped.get(key) ?? [];
-    arr.push(t);
-    grouped.set(key, arr);
-  }
-
-  return (
-    <div className="space-y-6">
-      {active ? (
-        <div className="rounded-xl border bg-primary/5 p-4 flex items-center justify-between">
-          <div>
-            <div className="text-sm text-muted-foreground">Workout in progress</div>
-            <div className="font-medium">Resume to continue logging sets.</div>
-          </div>
-          <Link
-            to="/app/workouts/session/$sessionId"
-            params={{ sessionId: active.id }}
-            className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm"
-          >
-            Resume
-          </Link>
-        </div>
-      ) : null}
-
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">New routine</h2>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!groupName.trim()) return;
-            await createRoutineGroup(groupName.trim());
-            setGroupName("");
-          }}
-          className="flex gap-2"
-        >
-          <input
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="Routine name (e.g. Push/Pull/Legs)"
-            className="flex-1 rounded-md border bg-background px-3 py-2"
-          />
-          <button className="rounded-md bg-secondary px-3 py-2 text-sm">Add</button>
-        </form>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">New workout</h2>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!newName.trim()) return;
-            const id = await createTemplate({
-              name: newName.trim(),
-              notes: null,
-              routineGroupId: null,
-              routineOrder: null,
-            });
-            setNewName("");
-            await navigate({ to: "/app/workouts/$id", params: { id } });
-          }}
-          className="flex gap-2"
-        >
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Workout name (e.g. Push Day)"
-            className="flex-1 rounded-md border bg-background px-3 py-2"
-          />
-          <button className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm">
-            Create
-          </button>
-        </form>
-      </section>
-
-      {groups.length > 0 ? (
-        <div className="space-y-6">
-          {groups.map((g) => (
-            <section key={g.id} className="space-y-2">
-              <h3 className="font-medium">{g.name}</h3>
-              <TemplateList
-                items={grouped.get(g.id) ?? []}
-                onDelete={deleteTemplate}
-                onStart={async (tid) => {
-                  const sid = await startSession(tid);
-                  await navigate({
-                    to: "/app/workouts/session/$sessionId",
-                    params: { sessionId: sid },
-                  });
-                }}
-              />
-            </section>
-          ))}
-        </div>
-      ) : null}
-
-      <section className="space-y-2">
-        <h3 className="font-medium">Unassigned</h3>
-        <TemplateList
-          items={grouped.get(null) ?? []}
-          onDelete={deleteTemplate}
-          onStart={async (tid) => {
-            const sid = await startSession(tid);
-            await navigate({
-              to: "/app/workouts/session/$sessionId",
-              params: { sessionId: sid },
-            });
-          }}
-        />
-      </section>
-    </div>
+function useTemplateItemCounts() {
+  const { db } = useDb();
+  const { userId } = useLocalSession();
+  return useLiveArray<{ templateId: string; count: number }>(
+    async () => {
+      if (!db || !userId) return [];
+      const items = (await db.workoutTemplateItems
+        .filter((r) => r.deletedAt === null)
+        .toArray()) as unknown as Array<{ templateId: string }>;
+      const byT = new Map<string, number>();
+      for (const it of items) {
+        byT.set(it.templateId, (byT.get(it.templateId) ?? 0) + 1);
+      }
+      return [...byT.entries()].map(([templateId, count]) => ({
+        templateId,
+        count,
+      }));
+    },
+    [db, userId]
   );
 }
 
-interface Template {
-  id: string;
-  name: string;
-  notes: string | null;
+function templateSortKey(t: WorkoutTemplate): number {
+  return t.routineOrder ?? Number.MAX_SAFE_INTEGER;
 }
 
-function TemplateList({
-  items,
-  onDelete,
-  onStart,
-}: {
-  items: Template[];
-  onDelete: (id: string) => Promise<void>;
-  onStart: (id: string) => Promise<void>;
-}) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">No workouts yet.</p>;
-  }
+function groupedTemplates(
+  templates: WorkoutTemplate[],
+  groupId: string
+): WorkoutTemplate[] {
+  return templates
+    .filter((t) => t.routineGroupId === groupId)
+    .sort((a, b) => templateSortKey(a) - templateSortKey(b) || a.createdAt - b.createdAt);
+}
+
+function WorkoutsPage() {
+  const { data: groups } = useRoutineGroups();
+  const { data: templates } = useWorkoutTemplates();
+  const { data: counts } = useTemplateItemCounts();
+
+  const countMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of counts) m.set(c.templateId, c.count);
+    return m;
+  }, [counts]);
+
+  const ungrouped = useMemo(
+    () =>
+      templates
+        .filter((t) => !t.routineGroupId)
+        .sort((a, b) => a.createdAt - b.createdAt),
+    [templates]
+  );
+
+  const totalTemplates = templates.length;
+
   return (
-    <ul className="space-y-2">
-      {items.map((t) => (
-        <li
-          key={t.id}
-          className="rounded-xl border bg-card p-3 flex items-center justify-between gap-2"
-        >
+    <div className="mx-auto w-full max-w-xl space-y-8 sm:max-w-5xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
+            <span className="bg-primary/15 text-primary ring-primary/15 inline-flex size-10 items-center justify-center rounded-2xl ring-1">
+              <ClipboardList className="size-5" strokeWidth={2.25} aria-hidden />
+            </span>
+            Workouts
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Your saved workouts, organized into routines.
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end sm:gap-2">
           <Link
-            to="/app/workouts/$id"
-            params={{ id: t.id }}
-            className="flex-1 min-w-0"
+            to="/app/coach"
+            search={{ prompt: COACH_CREATE_WORKOUT_OR_ROUTINE_PROMPT }}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "inline-flex min-h-12 shrink-0 touch-manipulation items-center justify-center gap-2 text-base shadow-sm"
+            )}
           >
-            <div className="font-medium truncate">{t.name}</div>
-            {t.notes ? (
-              <div className="text-xs text-muted-foreground truncate">
-                {t.notes}
-              </div>
-            ) : null}
+            <Sparkles className="size-4" aria-hidden />
+            Create with AI
           </Link>
-          <button
-            onClick={() => onStart(t.id)}
-            className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm"
+          <Link
+            to="/app/workouts/new"
+            className={cn(
+              buttonVariants(),
+              "inline-flex min-h-12 shrink-0 touch-manipulation items-center justify-center gap-2 text-base shadow-sm"
+            )}
           >
-            Start
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`Delete ${t.name}?`)) void onDelete(t.id);
-            }}
-            className="rounded-md border px-3 py-1.5 text-sm text-destructive"
-          >
-            ×
-          </button>
-        </li>
-      ))}
-    </ul>
+            <Plus className="size-4" aria-hidden />
+            New workout
+          </Link>
+        </div>
+      </div>
+
+      {totalTemplates === 0 ? (
+        <div className="border-primary/15 bg-card rounded-xl border p-8 text-center shadow-sm">
+          <p className="text-muted-foreground text-sm">
+            You don&apos;t have any workouts yet. Create one to get started.
+          </p>
+        </div>
+      ) : null}
+
+      {groups.map((group) => {
+        const groupTemplates = groupedTemplates(templates, group.id);
+        return (
+          <section key={group.id} className="space-y-4">
+            <WorkoutRoutineGroupHeader
+              routineGroupId={group.id}
+              name={group.name}
+            />
+            {groupTemplates.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No workouts in this routine yet.
+              </p>
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {groupTemplates.map((t, idx) => {
+                  const prev = groupTemplates[idx - 1] ?? null;
+                  const next = groupTemplates[idx + 1] ?? null;
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex flex-col gap-2 sm:items-stretch"
+                    >
+                      <WorkoutTemplateLibraryCard
+                        template={{
+                          id: t.id,
+                          name: t.name,
+                          createdAt: t.createdAt,
+                          itemCount: countMap.get(t.id) ?? 0,
+                        }}
+                      />
+                      {groupTemplates.length > 1 ? (
+                        <div className="flex justify-end">
+                          <WorkoutRoutineOrderButtons
+                            templateId={t.id}
+                            templateOrder={t.routineOrder}
+                            prevTemplateId={prev?.id ?? null}
+                            prevOrder={prev?.routineOrder ?? null}
+                            nextTemplateId={next?.id ?? null}
+                            nextOrder={next?.routineOrder ?? null}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+
+      {ungrouped.length > 0 ? (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">
+            {groups.length > 0 ? "Not in a routine" : "Your workouts"}
+          </h2>
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {ungrouped.map((t) => (
+              <WorkoutTemplateLibraryCard
+                key={t.id}
+                template={{
+                  id: t.id,
+                  name: t.name,
+                  createdAt: t.createdAt,
+                  itemCount: countMap.get(t.id) ?? 0,
+                }}
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
   );
 }

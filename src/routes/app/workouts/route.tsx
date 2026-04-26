@@ -1,42 +1,42 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 
+import {
+  AppSubNav,
+  appSubNavTriggerClassName,
+} from "@/components/app/app-sub-nav";
+import { cn } from "@/lib/utils";
+
 export const Route = createFileRoute("/app/workouts")({
   component: WorkoutsLayout,
 });
 
-const tabs = [
-  { to: "/app/workouts", label: "Routines" },
-  { to: "/app/workouts/calendar", label: "Calendar" },
-];
-
 function WorkoutsLayout() {
-  const location = useLocation();
+  const pathname = useLocation({ select: (s) => s.pathname });
+  const isCalendar = pathname.startsWith("/app/workouts/calendar");
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 border-b">
-        {tabs.map((t) => {
-          const active =
-            t.to === "/app/workouts"
-              ? location.pathname === "/app/workouts" ||
-                location.pathname.startsWith("/app/workouts/new") ||
-                /^\/app\/workouts\/[^/]+$/.test(location.pathname)
-              : location.pathname === t.to;
-          return (
-            <Link
-              key={t.to}
-              to={t.to}
-              className={
-                "px-3 py-2 text-sm border-b-2 -mb-px " +
-                (active
-                  ? "border-primary text-primary font-medium"
-                  : "border-transparent text-muted-foreground hover:text-foreground")
-              }
-            >
-              {t.label}
-            </Link>
-          );
-        })}
-      </div>
+    <div>
+      <AppSubNav
+        className="mx-auto mb-8 max-w-xl sm:max-w-5xl"
+        aria-label="Workouts sections"
+      >
+        <Link
+          to="/app/workouts"
+          role="tab"
+          aria-selected={!isCalendar}
+          className={cn(appSubNavTriggerClassName(!isCalendar))}
+        >
+          Workouts
+        </Link>
+        <Link
+          to="/app/workouts/calendar"
+          role="tab"
+          aria-selected={isCalendar}
+          className={cn(appSubNavTriggerClassName(isCalendar))}
+        >
+          Calendar
+        </Link>
+      </AppSubNav>
       <Outlet />
     </div>
   );

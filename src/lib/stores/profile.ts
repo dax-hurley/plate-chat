@@ -7,6 +7,24 @@ import { insertLocal, updateLocal } from "@/lib/client/db/writes";
 export interface UserProfile {
   userId: string;
   heightIn: number | null;
+  sex?:
+    | "male"
+    | "female"
+    | "transgender_man"
+    | "transgender_woman"
+    | "nonbinary"
+    | "other"
+    | "prefer_not_to_say"
+    | null;
+  activityLevel?:
+    | "sedentary"
+    | "light"
+    | "moderate"
+    | "active"
+    | "very_active"
+    | null;
+  ageYears?: number | null;
+  onboardingCompletedAt?: number | null;
   goalPreset: "lose_weight" | "gain_muscle" | "build_strength" | "custom";
   fitnessGoals: string | null;
   preferences: string | null;
@@ -49,6 +67,10 @@ export function useProfileMutations() {
       await insertLocal(db.userProfiles, {
         userId,
         heightIn: null,
+        sex: null,
+        activityLevel: null,
+        ageYears: null,
+        onboardingCompletedAt: null,
         goalPreset: "custom",
         fitnessGoals: null,
         preferences: null,

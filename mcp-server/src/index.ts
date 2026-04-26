@@ -49,7 +49,7 @@ async function api(method: string, path: string, body?: unknown) {
 }
 
 const server = new McpServer({
-  name: "trainlog",
+  name: "platechat",
   version: "1.0.0",
 });
 

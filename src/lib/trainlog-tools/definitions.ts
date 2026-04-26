@@ -18,6 +18,17 @@ const createWorkoutTemplateInput = z.object({
   notes: z.string().optional().describe("Optional notes"),
 });
 
+const updateWorkoutTemplateInput = z
+  .object({
+    templateId: z.string().describe("Workout template UUID from list_workout_templates"),
+    name: z.string().optional().describe("New display name"),
+    notes: z.string().nullable().optional().describe("Notes; null clears"),
+  })
+  .refine(
+    (o) => o.name !== undefined || o.notes !== undefined,
+    { message: "Provide at least one of name, notes" }
+  );
+
 const createExerciseInput = z.object({
   name: z.string().describe("Exercise name, e.g. Bench press"),
   muscleGroup: z
@@ -102,6 +113,21 @@ const addExerciseToTemplateInput = z.object({
   progressiveOverloadEnabled: z.boolean().optional(),
   progressiveOverloadIncrement: z.number().positive().nullable().optional(),
   progressiveOverloadRequireFullCompletion: z.boolean().optional(),
+  isWarmup: z
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the lift appears under the session Warmup tab instead of the main workout list."
+    ),
+  restBetweenSetsSec: z
+    .number()
+    .int()
+    .min(0)
+    .max(3600)
+    .optional()
+    .describe(
+      "Rest in seconds after each logged set for this line; omit or 0 = no rest countdown in live sessions."
+    ),
 });
 
 const addExerciseToTemplateLineInput = addExerciseToTemplateInput.omit({
@@ -236,6 +262,14 @@ const logMealEntryInput = z.object({
   fatG: z.number().optional(),
 });
 
+const scrapeRecipeUrlInput = z.object({
+  url: z
+    .string()
+    .describe(
+      "Public http(s) recipe page URL the user shared. Must be a normal web link (not file: or internal hosts)."
+    ),
+});
+
 const listMealLibraryInput = z.object({
   query: z.string().optional().describe("Substring search; omit for full list"),
 });
@@ -346,6 +380,24 @@ const goalPresetSchema = z.enum([
   "custom",
 ]);
 
+const profileSexSchema = z.enum([
+  "male",
+  "female",
+  "transgender_man",
+  "transgender_woman",
+  "nonbinary",
+  "other",
+  "prefer_not_to_say",
+]);
+
+const activityLevelSchema = z.enum([
+  "sedentary",
+  "light",
+  "moderate",
+  "active",
+  "very_active",
+]);
+
 const updateUserProfileInput = z
   .object({
     name: z
@@ -359,6 +411,26 @@ const updateUserProfileInput = z
       .nullable()
       .optional()
       .describe("Height in inches"),
+    sex: profileSexSchema
+      .nullable()
+      .optional()
+      .describe(
+        "User sex: male, female, transgender_man, transgender_woman, nonbinary, other, prefer_not_to_say (snake_case only)"
+      ),
+    activityLevel: activityLevelSchema
+      .nullable()
+      .optional()
+      .describe(
+        "Usual activity: sedentary, light, moderate, active, very_active"
+      ),
+    ageYears: z
+      .number()
+      .int()
+      .min(1)
+      .max(120)
+      .nullable()
+      .optional()
+      .describe("Age in years"),
     goalPreset: goalPresetSchema
       .nullable()
       .optional()
@@ -411,6 +483,9 @@ const updateUserProfileInput = z
     (o) =>
       o.name !== undefined ||
       o.heightIn !== undefined ||
+      o.sex !== undefined ||
+      o.activityLevel !== undefined ||
+      o.ageYears !== undefined ||
       o.goalPreset !== undefined ||
       o.fitnessGoals !== undefined ||
       o.preferences !== undefined ||
@@ -425,7 +500,7 @@ export const TRAINLOG_TOOL_DEFINITIONS = [
   {
     name: "list_workout_templates" as const,
     description:
-      "List saved workout templates with exercises and set/rep targets.",
+      "List saved workout templates with exercises, set/rep targets, and per-line restBetweenSetsSec for the live session timer after each set.",
     completionText: "Loaded your workout templates",
     errorText: "Couldn't load workout templates",
     inputSchema: emptyInput,
@@ -433,10 +508,18 @@ export const TRAINLOG_TOOL_DEFINITIONS = [
   {
     name: "create_workout_template" as const,
     description:
-      "Create a new empty workout template (saved routine). Add lifts with bulk_add_exercises_to_template or add_exercise_to_template, then start_workout when ready.",
+      "Create a new empty workout template (saved routine). Add lifts with bulk_add_exercises_to_template or add_exercise_to_template (optional restBetweenSetsSec per line), then start_workout when ready.",
     completionText: "Created workout template",
     errorText: "Couldn't create workout template",
     inputSchema: createWorkoutTemplateInput,
+  },
+  {
+    name: "update_workout_template" as const,
+    description:
+      "Update a saved workout’s name and/or notes. Per-exercise rest is set on template lines (add_exercise_to_template, etc.). Use list_workout_templates for templateId.",
+    completionText: "Updated workout template",
+    errorText: "Couldn't update workout template",
+    inputSchema: updateWorkoutTemplateInput,
   },
   {
     name: "list_exercises" as const,
@@ -676,11 +759,19 @@ export const TRAINLOG_TOOL_DEFINITIONS = [
     inputSchema: logMealEntryInput,
   },
   {
+    name: "scrape_recipe_url" as const,
+    description:
+      "Load a recipe web page and return clean markdown from Firecrawl (ingredients and steps are usually readable). Use when the user shares a recipe URL; then map the markdown into create_meal_library_item (name, ingredient lines, instructions, macros—estimate macros only when the page states them). If the page is paywalled or empty, say so and ask for paste or another link.",
+    completionText: "Fetched recipe page",
+    errorText: "Couldn't fetch recipe page",
+    inputSchema: scrapeRecipeUrlInput,
+  },
+  {
     name: "list_meal_library" as const,
     description:
       "Search saved meal-library recipes (ingredients, instructions, macros). Matches name, instructions, and ingredient lines.",
-    completionText: "Searched meal library",
-    errorText: "Couldn't search meal library",
+    completionText: "Searched recipe library",
+    errorText: "Couldn't search recipe library",
     inputSchema: listMealLibraryInput,
   },
   {

@@ -1,11 +1,28 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ListTree } from "lucide-react";
+import { toast } from "sonner";
+
+import { AssignWorkoutToRoutineSelect } from "@/components/app/assign-workout-to-routine-select";
+import { TemplateEditor } from "@/components/app/template-editor";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  useWorkoutTemplate,
-  useTemplateItems,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   useExercises,
+  useRoutineGroups,
+  useTemplateItems,
   useWorkoutMutations,
-} from "@/lib/stores/workouts";
+  useWorkoutTemplate,
+} from "@/lib/stores";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/workouts/$id")({
   component: TemplatePage,
@@ -13,192 +30,149 @@ export const Route = createFileRoute("/app/workouts/$id")({
 
 function TemplatePage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
   const { data: template } = useWorkoutTemplate(id);
   const { data: items } = useTemplateItems(id);
   const { data: exercises } = useExercises();
-  const {
-    updateTemplate,
-    addTemplateItem,
-    updateTemplateItem,
-    deleteTemplateItem,
-    startSession,
-  } = useWorkoutMutations();
+  const { data: groups } = useRoutineGroups();
+  const { updateTemplate } = useWorkoutMutations();
 
-  const [name, setName] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
 
-  const displayedName = name ?? template?.name ?? "";
-  const displayedNotes = notes ?? template?.notes ?? "";
+  useEffect(() => {
+    if (template) {
+      setNameDraft(null);
+      setNotesDraft(null);
+    }
+  }, [template?.id]);
 
-  const exerciseMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of exercises) m.set(e.id, e.name);
-    return m;
-  }, [exercises]);
+  const displayedName = nameDraft ?? template?.name ?? "";
+  const displayedNotes = notesDraft ?? template?.notes ?? "";
 
-  if (!template) return <p className="text-muted-foreground">Loading…</p>;
+  const routineOptions = useMemo(
+    () => groups.map((g) => ({ id: g.id, name: g.name })),
+    [groups]
+  );
+
+  if (!template)
+    return (
+      <p className="text-muted-foreground text-center py-10">Loading…</p>
+    );
+
+  async function saveName() {
+    if (!template) return;
+    const next = (nameDraft ?? template.name).trim();
+    if (!next || next === template.name) {
+      setNameDraft(null);
+      return;
+    }
+    try {
+      await updateTemplate(template.id, { name: next });
+      setNameDraft(null);
+      toast.success("Name saved", { description: "Workout updated." });
+    } catch {
+      toast.error("Could not save name");
+    }
+  }
+
+  async function saveNotes() {
+    if (!template) return;
+    const raw = notesDraft ?? template.notes ?? "";
+    const next = raw.trim() === "" ? null : raw.trim();
+    if (next === (template.notes ?? null)) {
+      setNotesDraft(null);
+      return;
+    }
+    try {
+      await updateTemplate(template.id, { notes: next });
+      setNotesDraft(null);
+      toast.success("Notes saved", { description: "Workout updated." });
+    } catch {
+      toast.error("Could not save notes");
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Link to="/app/workouts" className="text-sm text-muted-foreground">
-          ← Back
-        </Link>
-        <button
-          onClick={async () => {
-            const sid = await startSession(id);
-            await navigate({
-              to: "/app/workouts/session/$sessionId",
-              params: { sessionId: sid },
-            });
-          }}
-          className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm"
-        >
-          Start workout
-        </button>
+    <div className="mx-auto max-w-xl space-y-8">
+      <Link
+        to="/app/workouts"
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          "min-h-11 -ml-2 inline-flex items-center gap-2"
+        )}
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        Workouts
+      </Link>
+
+      <div>
+        <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
+          <span className="bg-primary/15 text-primary ring-primary/15 inline-flex size-10 items-center justify-center rounded-2xl ring-1">
+            <ListTree className="size-5" strokeWidth={2.25} aria-hidden />
+          </span>
+          {template.name}
+        </h1>
       </div>
 
-      <section className="space-y-2">
-        <input
-          className="w-full text-2xl font-semibold bg-transparent border-b py-1"
-          value={displayedName}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            if (name !== null && name !== template.name) {
-              void updateTemplate(id, { name });
-            }
-          }}
-        />
-        <textarea
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          placeholder="Notes"
-          value={displayedNotes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => {
-            if (notes !== null && notes !== (template.notes ?? "")) {
-              void updateTemplate(id, { notes: notes || null });
-            }
-          }}
-        />
-      </section>
+      <Card className="border-primary/15">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0">
+          <div className="space-y-2">
+            <Label htmlFor="template-name">Name</Label>
+            <Input
+              id="template-name"
+              value={displayedName}
+              className="min-h-12 text-base"
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={saveName}
+            />
+          </div>
+          <div className="border-border/60 space-y-2 border-t pt-4">
+            <p className="text-foreground text-sm font-medium">Routine</p>
+            <p className="text-muted-foreground text-sm">
+              Group this workout with others in a rotation, keep it
+              unassigned, or add a new routine from the field below.
+            </p>
+            <AssignWorkoutToRoutineSelect
+              templateId={template.id}
+              currentRoutineGroupId={template.routineGroupId ?? null}
+              routineOptions={routineOptions}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Exercises</h2>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No exercises yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {items.map((it, idx) => (
-              <li
-                key={it.id}
-                className="rounded-xl border bg-card p-3 flex items-center gap-3"
-              >
-                <span className="text-xs text-muted-foreground w-6">
-                  {idx + 1}.
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">
-                    {exerciseMap.get(it.exerciseId) ?? "Exercise"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {it.targetSets} sets
-                    {it.targetReps ? ` × ${it.targetReps} reps` : ""}
-                    {it.defaultWeight
-                      ? ` @ ${it.defaultWeight}${it.weightUnit ?? ""}`
-                      : ""}
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const next = prompt("Target sets", String(it.targetSets));
-                    if (!next) return;
-                    const n = Number(next);
-                    if (!Number.isFinite(n) || n < 1) return;
-                    void updateTemplateItem(it.id, { targetSets: n });
-                  }}
-                  className="rounded-md border px-2 py-1 text-xs"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm("Remove exercise?"))
-                      void deleteTemplateItem(it.id);
-                  }}
-                  className="rounded-md border px-2 py-1 text-xs text-destructive"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <TemplateEditor
+        templateId={template.id}
+        items={items}
+        exercises={exercises}
+      />
 
-        <AddExerciseForm
-          onAdd={async (exerciseId) => {
-            const order = items.length;
-            await addTemplateItem({
-              templateId: id,
-              exerciseId,
-              order,
-              targetSets: 3,
-              targetReps: 8,
-              targetDurationSec: null,
-              targetDistance: null,
-              defaultWeight: null,
-              weightUnit: "lb",
-              progressiveOverloadEnabled: false,
-              progressiveOverloadIncrement: null,
-              progressiveOverloadRequireFullCompletion: false,
-              trackWeight: true,
-              logTimeForDistanceSets: false,
-            });
-          }}
-          exercises={exercises}
-        />
-      </section>
+      <Card className="border-primary/15">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Notes</CardTitle>
+          <CardDescription>
+            Reminders for this workout—form cues, warm-up flow, or equipment.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="space-y-2">
+            <Label htmlFor="template-notes" className="sr-only">
+              Notes
+            </Label>
+            <Input
+              id="template-notes"
+              value={displayedNotes}
+              placeholder="Warm-up tips, etc."
+              className="min-h-12 text-base"
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onBlur={saveNotes}
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-function AddExerciseForm({
-  onAdd,
-  exercises,
-}: {
-  onAdd: (exerciseId: string) => Promise<void>;
-  exercises: { id: string; name: string }[];
-}) {
-  const [selected, setSelected] = useState<string>("");
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!selected) return;
-        await onAdd(selected);
-        setSelected("");
-      }}
-      className="flex gap-2"
-    >
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
-        className="flex-1 rounded-md border bg-background px-3 py-2"
-      >
-        <option value="">Add exercise…</option>
-        {exercises.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
-      <button
-        type="submit"
-        disabled={!selected}
-        className="rounded-md bg-secondary px-3 py-2 text-sm disabled:opacity-60"
-      >
-        Add
-      </button>
-    </form>
   );
 }

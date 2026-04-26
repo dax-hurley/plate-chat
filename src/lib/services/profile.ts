@@ -3,6 +3,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { userProfiles, userVitalEntries, users } from "@/db/schema";
 import {
+  parseActivityLevel,
+  parseProfileSex,
+  type ActivityLevel,
+  type ProfileSex,
+} from "@/lib/profile-demographics";
+import {
   parseGoalPreset,
   type GoalPreset,
 } from "@/lib/profile-goal-preset";
@@ -10,6 +16,11 @@ import {
 export type UserProfileBundle = {
   name: string | null;
   heightIn: number | null;
+  sex: ProfileSex | null;
+  activityLevel: ActivityLevel | null;
+  ageYears: number | null;
+  /** Null when onboarding has not been completed. */
+  onboardingCompletedAt: Date | null;
   goalPreset: GoalPreset;
   fitnessGoals: string | null;
   preferences: string | null;
@@ -40,6 +51,13 @@ export async function getProfileForUser(
   return {
     name: u?.name ?? null,
     heightIn: p?.heightIn ?? null,
+    sex: parseProfileSex(p?.sex ?? null),
+    activityLevel: parseActivityLevel(p?.activityLevel ?? null),
+    ageYears:
+      p?.ageYears != null && Number.isFinite(p.ageYears) && p.ageYears > 0
+        ? Math.round(p.ageYears)
+        : null,
+    onboardingCompletedAt: p?.onboardingCompletedAt ?? null,
     goalPreset: parseGoalPreset(p?.goalPreset),
     fitnessGoals: p?.fitnessGoals ?? null,
     preferences: p?.preferences ?? null,
@@ -92,6 +110,10 @@ export async function updateUserProfile(
   patch: {
     name?: string | null;
     heightIn?: number | null;
+    sex?: ProfileSex | string | null;
+    activityLevel?: ActivityLevel | string | null;
+    ageYears?: number | null;
+    onboardingCompletedAt?: Date | null;
     /** API/MCP may send string; normalized with `parseGoalPreset`. */
     goalPreset?: GoalPreset | string | null;
     fitnessGoals?: string | null;
@@ -117,6 +139,10 @@ export async function updateUserProfile(
 
   const hasProfileFields =
     patch.heightIn !== undefined ||
+    patch.sex !== undefined ||
+    patch.activityLevel !== undefined ||
+    patch.ageYears !== undefined ||
+    patch.onboardingCompletedAt !== undefined ||
     patch.goalPreset !== undefined ||
     patch.fitnessGoals !== undefined ||
     patch.preferences !== undefined ||
@@ -134,6 +160,32 @@ export async function updateUserProfile(
 
   const heightIn =
     patch.heightIn !== undefined ? patch.heightIn : (existing?.heightIn ?? null);
+  const sex =
+    patch.sex !== undefined
+      ? parseProfileSex(
+          typeof patch.sex === "string" ? patch.sex : String(patch.sex ?? "")
+        )
+      : parseProfileSex(existing?.sex ?? null);
+  const activityLevel =
+    patch.activityLevel !== undefined
+      ? parseActivityLevel(
+          typeof patch.activityLevel === "string"
+            ? patch.activityLevel
+            : String(patch.activityLevel ?? "")
+        )
+      : parseActivityLevel(existing?.activityLevel ?? null);
+  const ageYears =
+    patch.ageYears !== undefined
+      ? patch.ageYears != null && Number.isFinite(patch.ageYears) && patch.ageYears > 0
+        ? Math.min(120, Math.max(1, Math.round(patch.ageYears)))
+        : null
+      : existing?.ageYears != null && Number.isFinite(existing.ageYears)
+        ? Math.round(existing.ageYears)
+        : null;
+  const onboardingCompletedAt =
+    patch.onboardingCompletedAt !== undefined
+      ? patch.onboardingCompletedAt
+      : (existing?.onboardingCompletedAt ?? null);
   const goalPreset =
     patch.goalPreset !== undefined
       ? parseGoalPreset(patch.goalPreset)
@@ -165,10 +217,15 @@ export async function updateUserProfile(
       : (existing?.goalFatG ?? null);
 
   if (existing) {
+    const now = new Date();
     await db
       .update(userProfiles)
       .set({
         heightIn,
+        sex,
+        activityLevel,
+        ageYears,
+        onboardingCompletedAt,
         goalPreset,
         fitnessGoals,
         preferences,
@@ -176,12 +233,18 @@ export async function updateUserProfile(
         goalProteinG,
         goalCarbsG,
         goalFatG,
+        updatedAt: now,
+        rev: (existing.rev ?? 0) + 1,
       })
       .where(eq(userProfiles.userId, userId));
   } else {
     await db.insert(userProfiles).values({
       userId,
       heightIn,
+      sex,
+      activityLevel,
+      ageYears,
+      onboardingCompletedAt,
       goalPreset,
       fitnessGoals,
       preferences,

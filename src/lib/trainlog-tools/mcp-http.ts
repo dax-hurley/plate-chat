@@ -21,8 +21,27 @@ export async function runTrainlogToolMcp(
       return api("GET", "/api/v1/workouts/templates");
 
     case "create_workout_template": {
-      const { name: n, notes } = input as { name: string; notes?: string };
-      return api("POST", "/api/v1/workouts/templates", { name: n, notes });
+      const { name: n, notes } = input as {
+        name: string;
+        notes?: string;
+      };
+      return api("POST", "/api/v1/workouts/templates", {
+        name: n,
+        notes,
+      });
+    }
+
+    case "update_workout_template": {
+      const { templateId, name, notes } = input as {
+        templateId: string;
+        name?: string;
+        notes?: string | null;
+      };
+      return api(
+        "PATCH",
+        `/api/v1/workouts/templates/${encodeURIComponent(String(templateId))}`,
+        { name, notes }
+      );
     }
 
     case "list_exercises":
@@ -70,6 +89,8 @@ export async function runTrainlogToolMcp(
         progressiveOverloadEnabled,
         progressiveOverloadIncrement,
         progressiveOverloadRequireFullCompletion,
+        isWarmup,
+        restBetweenSetsSec,
       } = input as Record<string, unknown>;
       return api(
         "POST",
@@ -85,6 +106,8 @@ export async function runTrainlogToolMcp(
           progressiveOverloadEnabled,
           progressiveOverloadIncrement,
           progressiveOverloadRequireFullCompletion,
+          isWarmup,
+          restBetweenSetsSec,
         }
       );
     }
@@ -376,6 +399,11 @@ export async function runTrainlogToolMcp(
         carbsG: carbsG ?? 0,
         fatG: fatG ?? 0,
       });
+    }
+
+    case "scrape_recipe_url": {
+      const { url } = input as { url: string };
+      return api("POST", "/api/v1/nutrition/import-recipe-url", { url });
     }
 
     case "list_meal_library": {

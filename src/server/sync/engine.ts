@@ -17,7 +17,7 @@
  *   `conflicts` (server-canonical rows that beat the client), so clients can
  *   clear their pending flags without waiting for a round-trip pull.
  */
-import { and, asc, eq, gt, or } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { db } from "@/db/client";
 import {
@@ -28,6 +28,14 @@ import {
 } from "@/shared/schemas/collections";
 
 type AnyTable = SQLiteTableWithColumns<any>;
+
+/**
+ * Collections where some rows are global (e.g. preset catalog with null
+ * `userId`) and must be pulled for every user, not only `userId = session`.
+ */
+const pullIncludesGlobalUserIdRows: ReadonlySet<CollectionName> = new Set([
+  "exercises",
+]);
 
 export interface PullCheckpoint {
   updatedAt: number;
@@ -40,6 +48,18 @@ export interface PushRow {
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
+
+function isForeignKeyViolation(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const o = err as Record<string, unknown>;
+  if (o.extendedCode === "SQLITE_CONSTRAINT_FOREIGNKEY") return true;
+  if (o.code === "SQLITE_CONSTRAINT_FOREIGNKEY") return true;
+  const msg = String(o.message ?? "");
+  if (/FOREIGN KEY constraint failed/i.test(msg)) return true;
+  const cause = o.cause;
+  if (cause) return isForeignKeyViolation(cause);
+  return false;
+}
 
 function tableFor(name: CollectionName): AnyTable {
   return collections[name].table;
@@ -125,9 +145,12 @@ export async function handlePull(
     : undefined;
 
   const where = userIdCol
-    ? afterCursor
-      ? and(eq(userIdCol, userId), afterCursor)
-      : eq(userIdCol, userId)
+    ? (() => {
+        const ownership = pullIncludesGlobalUserIdRows.has(name)
+          ? or(isNull(userIdCol), eq(userIdCol, userId))
+          : eq(userIdCol, userId);
+        return afterCursor ? and(ownership, afterCursor) : ownership;
+      })()
     : afterCursor;
 
   const rows = await db
@@ -186,58 +209,114 @@ export async function handlePush(
         continue;
       }
 
-      const [existing] = await tx
-        .select()
-        .from(table)
-        .where(eq(idCol, candidateId))
-        .limit(1);
+      await tx.transaction(async (innerTx) => {
+        let [existing] = await innerTx
+          .select()
+          .from(table)
+          .where(eq(idCol, candidateId))
+          .limit(1);
 
-      if (existing) {
-        if (
-          ((existing as any).userId ?? null) !== null &&
-          (existing as any).userId !== userId
-        ) {
-          conflicts.push({ ...newDocumentState, _syncError: "forbidden" });
-          continue;
+        /**
+         * Meal plan slots are unique on (planId, dayIndex, slotIndex). The client
+         * may create a new row id after soft-deleting the previous slot at the
+         * same position; the server would otherwise try INSERT and hit the
+         * unique index while the tombstone row still exists.
+         */
+        if (!existing && name === "mealPlanSlots") {
+          const planId = String((newDocumentState as any).planId ?? "");
+          const dayIndex = (newDocumentState as any).dayIndex;
+          const slotIndex = (newDocumentState as any).slotIndex;
+          if (
+            planId &&
+            typeof dayIndex === "number" &&
+            Number.isFinite(dayIndex) &&
+            typeof slotIndex === "number" &&
+            Number.isFinite(slotIndex)
+          ) {
+            const [byPos] = await innerTx
+              .select()
+              .from(table)
+              .where(
+                and(
+                  eq(col(table, "userId"), userId),
+                  eq(col(table, "planId"), planId),
+                  eq(col(table, "dayIndex"), dayIndex),
+                  eq(col(table, "slotIndex"), slotIndex)
+                )
+              )
+              .limit(1);
+            if (byPos) existing = byPos;
+          }
         }
-        const existingUpdatedAt = toMs((existing as any).updatedAt);
-        const incomingUpdatedAt = toMs(
-          (newDocumentState as any).updatedAt ?? 0
+
+        if (existing) {
+          if (
+            ((existing as any).userId ?? null) !== null &&
+            (existing as any).userId !== userId
+          ) {
+            conflicts.push({ ...newDocumentState, _syncError: "forbidden" });
+            return;
+          }
+          const existingUpdatedAt = toMs((existing as any).updatedAt);
+          const incomingUpdatedAt = toMs(
+            (newDocumentState as any).updatedAt ?? 0
+          );
+          if (incomingUpdatedAt <= existingUpdatedAt) {
+            conflicts.push(serializeRow(existing as any));
+            return;
+          }
+        }
+
+        const nextRev =
+          Math.max(
+            Number((newDocumentState as any).rev ?? 0),
+            Number((existing as any)?.rev ?? 0)
+          ) + 1;
+
+        const payload = deserializeRow(
+          {
+            ...newDocumentState,
+            userId,
+            [pk]: candidateId,
+            rev: nextRev,
+          },
+          table
         );
-        if (incomingUpdatedAt <= existingUpdatedAt) {
-          conflicts.push(serializeRow(existing as any));
-          continue;
+
+        try {
+          if (existing) {
+            const existingId = String((existing as any)[pk]);
+            if (existingId !== candidateId) {
+              await innerTx.delete(table).where(eq(idCol, existingId));
+              await innerTx.insert(table).values(payload);
+            } else {
+              await innerTx
+                .update(table)
+                .set(payload)
+                .where(eq(idCol, candidateId));
+            }
+          } else {
+            await innerTx.insert(table).values(payload);
+          }
+        } catch (err) {
+          if (isForeignKeyViolation(err)) {
+            conflicts.push({
+              ...newDocumentState,
+              _syncError:
+                "foreign key: referenced row is missing on the server (sync parents first or retry)",
+            });
+            return;
+          }
+          throw err;
         }
-      }
 
-      const nextRev =
-        Math.max(
-          Number((newDocumentState as any).rev ?? 0),
-          Number((existing as any)?.rev ?? 0)
-        ) + 1;
-
-      const payload = deserializeRow(
-        {
-          ...newDocumentState,
-          userId,
-          [pk]: candidateId,
-          rev: nextRev,
-        },
-        table
-      );
-
-      if (existing) {
-        await tx.update(table).set(payload).where(eq(idCol, candidateId));
-      } else {
-        await tx.insert(table).values(payload);
-      }
-
-      const [written] = await tx
-        .select()
-        .from(table)
-        .where(eq(idCol, candidateId))
-        .limit(1);
-      if (written) applied.push(serializeRow(written as any));
+        const [written] = await innerTx
+          .select()
+          .from(table)
+          .where(eq(idCol, candidateId))
+          .limit(1);
+        if (written) applied.push(serializeRow(written as any));
+      });
     }
   });
 

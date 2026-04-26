@@ -15,6 +15,8 @@ export interface StoredTokenBundle {
   refreshExpiresAt: number;
   deviceId: string;
   userId: string;
+  email: string | null;
+  name: string | null;
 }
 
 const KEY = "trainlog.device-tokens";

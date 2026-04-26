@@ -26,6 +26,10 @@ const EXTRA_COACH_TOOL_UI: Record<
     completionText: "Searched tools",
     errorText: "Couldn't search tools",
   },
+  onboarding_meal_refinement_complete: {
+    completionText: "Continuing setup",
+    errorText: "Couldn't continue",
+  },
 };
 
 function humanizeToolName(name: string) {

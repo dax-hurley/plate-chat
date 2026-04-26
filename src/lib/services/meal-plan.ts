@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, like } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, like, sql } from "drizzle-orm";
 
 import { db, type Database } from "@/db/client";
 import {
@@ -51,6 +51,17 @@ export function aggregateShoppingList(
 
 type MealPlanTx = Pick<Database, "query" | "update">;
 
+function bumpMealPlanSlot(
+  set: { slotIndex?: number; label?: string; libraryItemId?: string | null },
+  currentRev: number
+) {
+  return {
+    ...set,
+    updatedAt: new Date(),
+    rev: (currentRev || 0) + 1,
+  };
+}
+
 async function shiftSlotIndicesRight(
   dbh: MealPlanTx,
   planId: string,
@@ -68,7 +79,12 @@ async function shiftSlotIndicesRight(
   for (const r of sorted) {
     await dbh
       .update(mealPlanSlots)
-      .set({ slotIndex: r.slotIndex + 1 })
+      .set(
+        bumpMealPlanSlot(
+          { slotIndex: r.slotIndex + 1 },
+          r.rev ?? 0
+        )
+      )
       .where(eq(mealPlanSlots.id, r.id));
   }
 }
@@ -90,7 +106,7 @@ async function persistSlotLabelsForDay(
     if (label && label !== s.label) {
       await dbh
         .update(mealPlanSlots)
-        .set({ label })
+        .set(bumpMealPlanSlot({ label }, s.rev ?? 0))
         .where(eq(mealPlanSlots.id, s.id));
     }
   }
@@ -145,7 +161,7 @@ export async function getOrCreatePlanForWeek(
 ) {
   let plan = await getPlanForWeek(userId, weekStartDayKey);
   if (plan) {
-    await ensureDefaultSlotsForPlan(plan.id);
+    await ensureDefaultSlotsForPlan(userId, plan.id);
     plan = await getPlanForWeek(userId, weekStartDayKey);
     return plan!;
   }
@@ -160,13 +176,14 @@ export async function getOrCreatePlanForWeek(
     })
     .returning();
 
-  await insertDefaultWeekSlots(inserted.id);
+  await insertDefaultWeekSlots(userId, inserted.id);
 
   return getPlanForWeek(userId, weekStartDayKey);
 }
 
-function insertDefaultWeekSlots(planId: string) {
+function insertDefaultWeekSlots(userId: string, planId: string) {
   const rows: {
+    userId: string;
     planId: string;
     dayIndex: number;
     slotIndex: number;
@@ -177,6 +194,7 @@ function insertDefaultWeekSlots(planId: string) {
   for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
     for (let slotIndex = 0; slotIndex < DEFAULT_SLOTS_PER_DAY; slotIndex++) {
       rows.push({
+        userId,
         planId,
         dayIndex,
         slotIndex,
@@ -190,7 +208,7 @@ function insertDefaultWeekSlots(planId: string) {
 }
 
 /** Ensures each day has Breakfast / Lunch / Dinner rows; adds missing slots for older plans. */
-async function ensureDefaultSlotsForPlan(planId: string) {
+async function ensureDefaultSlotsForPlan(userId: string, planId: string) {
   const existing = await db.query.mealPlanSlots.findMany({
     where: eq(mealPlanSlots.planId, planId),
   });
@@ -200,6 +218,7 @@ async function ensureDefaultSlotsForPlan(planId: string) {
     byDay.get(s.dayIndex)!.add(s.slotIndex);
   }
   const missing: {
+    userId: string;
     planId: string;
     dayIndex: number;
     slotIndex: number;
@@ -212,6 +231,7 @@ async function ensureDefaultSlotsForPlan(planId: string) {
     for (let si = 0; si < DEFAULT_SLOTS_PER_DAY; si++) {
       if (!have.has(si)) {
         missing.push({
+          userId,
           planId,
           dayIndex: d,
           slotIndex: si,
@@ -226,7 +246,11 @@ async function ensureDefaultSlotsForPlan(planId: string) {
 
   await db
     .update(mealPlanSlots)
-    .set({ label: DEFAULT_MEAL_LABELS[0] })
+    .set({
+      label: DEFAULT_MEAL_LABELS[0],
+      updatedAt: new Date(),
+      rev: sql`(COALESCE(${mealPlanSlots.rev}, 0) + 1)`,
+    })
     .where(
       and(
         eq(mealPlanSlots.planId, planId),
@@ -237,7 +261,11 @@ async function ensureDefaultSlotsForPlan(planId: string) {
 
   await db
     .update(mealPlanSlots)
-    .set({ slotKind: "snack" })
+    .set({
+      slotKind: "snack",
+      updatedAt: new Date(),
+      rev: sql`(COALESCE(${mealPlanSlots.rev}, 0) + 1)`,
+    })
     .where(
       and(
         eq(mealPlanSlots.planId, planId),
@@ -273,7 +301,12 @@ export async function setSlotLibraryItem(
   const now = new Date();
   await db
     .update(mealPlanSlots)
-    .set({ libraryItemId: input.libraryItemId })
+    .set(
+      bumpMealPlanSlot(
+        { libraryItemId: input.libraryItemId },
+        slot.rev ?? 0
+      )
+    )
     .where(eq(mealPlanSlots.id, input.slotId));
 
   await db
@@ -337,7 +370,12 @@ export async function setPlanLibraryAssignmentsBySlotIds(
       const libId = assignMap.get(s.id) ?? null;
       await tx
         .update(mealPlanSlots)
-        .set({ libraryItemId: libId })
+        .set(
+          bumpMealPlanSlot(
+            { libraryItemId: libId },
+            s.rev ?? 0
+          )
+        )
         .where(eq(mealPlanSlots.id, s.id));
     }
 
@@ -452,9 +490,15 @@ export async function setPlanSlotsBatch(
 
     const now = new Date();
     for (const r of resolved) {
+      const slotRow = plan.slots.find((s) => s.id === r.slotId);
       await tx
         .update(mealPlanSlots)
-        .set({ libraryItemId: r.libraryItemId })
+        .set(
+          bumpMealPlanSlot(
+            { libraryItemId: r.libraryItemId },
+            slotRow?.rev ?? 0
+          )
+        )
         .where(eq(mealPlanSlots.id, r.slotId));
     }
 
@@ -498,6 +542,7 @@ export async function addMealSlotForDay(
           ? Math.max(...sorted.map((s) => s.slotIndex))
           : -1;
       await tx.insert(mealPlanSlots).values({
+        userId,
         planId: plan.id,
         dayIndex: input.dayIndex,
         slotIndex: maxIdx + 1,
@@ -517,6 +562,7 @@ export async function addMealSlotForDay(
           await shiftSlotIndicesRight(tx, plan.id, input.dayIndex, 0);
         }
         await tx.insert(mealPlanSlots).values({
+          userId,
           planId: plan.id,
           dayIndex: input.dayIndex,
           slotIndex: 0,
@@ -529,6 +575,7 @@ export async function addMealSlotForDay(
         const insertAt = lastMeal.slotIndex;
         await shiftSlotIndicesRight(tx, plan.id, input.dayIndex, insertAt);
         await tx.insert(mealPlanSlots).values({
+          userId,
           planId: plan.id,
           dayIndex: input.dayIndex,
           slotIndex: insertAt,
@@ -566,7 +613,7 @@ export async function updateMealSlotLabel(
   const now = new Date();
   await db
     .update(mealPlanSlots)
-    .set({ label })
+    .set(bumpMealPlanSlot({ label }, slot.rev ?? 0))
     .where(eq(mealPlanSlots.id, input.slotId));
 
   await db

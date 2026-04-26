@@ -1,64 +1,55 @@
-import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useOnline } from "@/lib/client/use-online";
+import { useRouterState } from "@tanstack/react-router";
+
+import { AppHeader } from "@/components/app/app-header";
+import { AppNav } from "@/components/app/app-nav";
+import {
+  CoachMainArea,
+  CoachRuntimeProvider,
+} from "@/components/app/coach-runtime";
 import { useDb } from "@/lib/client/db/provider";
 
-interface NavItem {
-  to: string;
-  label: string;
-}
-
-const nav: NavItem[] = [
-  { to: "/app/workouts", label: "Workouts" },
-  { to: "/app/nutrition", label: "Nutrition" },
-  { to: "/app/progress", label: "Progress" },
-  { to: "/app/calendar", label: "Calendar" },
-  { to: "/app/coach", label: "Coach" },
-  { to: "/app/profile", label: "Profile" },
-];
-
 export function AppShell({ children }: { children: ReactNode }) {
-  const online = useOnline();
   const { ready } = useDb();
-  const location = useLocation();
+  const isOnboarding = useRouterState({
+    select: (s) => s.location.pathname.includes("/onboarding"),
+  });
+
+  if (isOnboarding) {
+    return (
+      <CoachRuntimeProvider>
+        <div className="bg-background flex h-dvh max-h-dvh flex-col overflow-hidden">
+          <main className="flex h-full min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden">
+            {ready ? (
+              children
+            ) : (
+              <div className="text-muted-foreground flex min-h-40 items-center justify-center p-6 text-sm">
+                Opening local database…
+              </div>
+            )}
+          </main>
+        </div>
+      </CoachRuntimeProvider>
+    );
+  }
 
   return (
-    <div className="min-h-dvh flex flex-col">
-      {!online ? (
-        <div className="sticky top-0 z-50 bg-amber-500/90 text-amber-950 px-4 py-2 text-sm text-center">
-          You&apos;re offline — changes save locally and sync when you reconnect.
+    <CoachRuntimeProvider>
+      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden">
+        <AppNav />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:pl-60">
+          <AppHeader />
+          <CoachMainArea>
+            {ready ? (
+              children
+            ) : (
+              <div className="py-12 text-center text-muted-foreground text-sm">
+                Opening local database…
+              </div>
+            )}
+          </CoachMainArea>
         </div>
-      ) : null}
-      <header className="border-b bg-background/80 backdrop-blur">
-        <nav className="max-w-5xl mx-auto flex overflow-x-auto gap-1 px-2 py-2">
-          {nav.map((item) => {
-            const active = location.pathname.startsWith(item.to);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={
-                  "px-3 py-2 rounded-md text-sm whitespace-nowrap " +
-                  (active
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground")
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
-        {ready ? (
-          children
-        ) : (
-          <div className="py-12 text-center text-muted-foreground text-sm">
-            Opening local database…
-          </div>
-        )}
-      </main>
-    </div>
+      </div>
+    </CoachRuntimeProvider>
   );
 }

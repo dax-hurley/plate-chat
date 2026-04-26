@@ -1,273 +1,206 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
-  useMealsOnDay,
-  useNutritionMutations,
-  useMealLibrary,
-  useMealEntries,
-} from "@/lib/stores/nutrition";
+  Beef,
+  ChevronLeft,
+  ChevronRight,
+  Droplets,
+  Flame,
+  Salad,
+  Wheat,
+} from "lucide-react";
+
+import { FoodLogList } from "@/components/nutrition/food-log-list";
+import { LogFoodForm } from "@/components/nutrition/log-food-form";
+import { buttonVariants } from "@/components/ui/button";
+import { addDaysKey, formatDayKey } from "@/lib/date-key";
+import { useDb } from "@/lib/client/db/provider";
+import { useLiveArray } from "@/lib/client/db/hooks";
+import { useMealsOnDay } from "@/lib/stores";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/nutrition/")({
   component: NutritionLogPage,
 });
 
-function pad(n: number) {
-  return n.toString().padStart(2, "0");
-}
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function formatDayLabel(dayKey: string): string {
+  const [y, m, d] = dayKey.split("-").map((n) => Number(n));
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function NutritionLogPage() {
-  const [dayKey, setDayKey] = useState(todayKey);
+  const [dayKey, setDayKey] = useState(() => formatDayKey());
   const { data: meals } = useMealsOnDay(dayKey);
-  const { data: library } = useMealLibrary();
-  const { logMeal, deleteMeal } = useNutritionMutations();
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const { db } = useDb();
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <input
-          type="date"
-          value={dayKey}
-          onChange={(e) => setDayKey(e.target.value)}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        />
-      </div>
-
-      <LogMealForm
-        library={library}
-        onLog={async (args) => {
-          await logMeal({
-            dayKey,
-            name: args.name,
-            sourceLibraryItemId: args.sourceLibraryItemId,
-            entries:
-              args.calories > 0
-                ? [
-                    {
-                      description: args.name,
-                      calories: args.calories,
-                      proteinG: args.proteinG,
-                      carbsG: args.carbsG,
-                      fatG: args.fatG,
-                    },
-                  ]
-                : [],
-          });
-        }}
-      />
-
-      <MealsList
-        meals={meals}
-        onDelete={deleteMeal}
-        onToggle={(id) => setExpanded(expanded === id ? null : id)}
-        expandedId={expanded}
-      />
-    </div>
-  );
-}
-
-function LogMealForm({
-  library,
-  onLog,
-}: {
-  library: { id: string; name: string; calories: number; proteinG: number; carbsG: number; fatG: number }[];
-  onLog: (args: {
-    name: string;
-    sourceLibraryItemId: string | null;
+  const mealIds = meals.map((m) => m.id).join(",");
+  const { data: totalsArr } = useLiveArray<{
     calories: number;
     proteinG: number;
     carbsG: number;
     fatG: number;
-  }) => Promise<void>;
-}) {
-  const [name, setName] = useState("");
-  const [fromLib, setFromLib] = useState("");
-  const [calories, setCalories] = useState("");
-  const [proteinG, setProteinG] = useState("");
-  const [carbsG, setCarbsG] = useState("");
-  const [fatG, setFatG] = useState("");
+  }>(
+    async () => {
+      if (!db || meals.length === 0)
+        return [{ calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }];
+      let calories = 0;
+      let proteinG = 0;
+      let carbsG = 0;
+      let fatG = 0;
+      for (const m of meals) {
+        const entries = (await db.mealEntries
+          .where("mealId")
+          .equals(m.id)
+          .toArray()) as unknown as Array<{
+          calories: number;
+          proteinG: number;
+          carbsG: number;
+          fatG: number;
+          deletedAt: number | null;
+        }>;
+        for (const e of entries) {
+          if (e.deletedAt !== null) continue;
+          calories += e.calories;
+          proteinG += e.proteinG;
+          carbsG += e.carbsG;
+          fatG += e.fatG;
+        }
+      }
+      return [{ calories, proteinG, carbsG, fatG }];
+    },
+    [db, mealIds]
+  );
 
-  const libMap = useMemo(() => new Map(library.map((l) => [l.id, l])), [library]);
+  const totals = totalsArr[0] ?? {
+    calories: 0,
+    proteinG: 0,
+    carbsG: 0,
+    fatG: 0,
+  };
+
+  const prevDay = useMemo(() => addDaysKey(dayKey, -1), [dayKey]);
+  const nextDay = useMemo(() => addDaysKey(dayKey, 1), [dayKey]);
+  const today = formatDayKey();
 
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const base = fromLib ? libMap.get(fromLib) : null;
-        await onLog({
-          name: name || base?.name || "Meal",
-          sourceLibraryItemId: fromLib || null,
-          calories: Number(calories) || base?.calories || 0,
-          proteinG: Number(proteinG) || base?.proteinG || 0,
-          carbsG: Number(carbsG) || base?.carbsG || 0,
-          fatG: Number(fatG) || base?.fatG || 0,
-        });
-        setName("");
-        setFromLib("");
-        setCalories("");
-        setProteinG("");
-        setCarbsG("");
-        setFatG("");
-      }}
-      className="rounded-xl border bg-card p-3 space-y-2"
-    >
-      <div className="grid grid-cols-2 gap-2">
-        <select
-          value={fromLib}
-          onChange={(e) => {
-            const id = e.target.value;
-            setFromLib(id);
-            const base = libMap.get(id);
-            if (base) {
-              setName(base.name);
-              setCalories(String(base.calories));
-              setProteinG(String(base.proteinG));
-              setCarbsG(String(base.carbsG));
-              setFatG(String(base.fatG));
-            }
-          }}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
+    <div className="mx-auto w-full max-w-xl space-y-6 md:max-w-7xl">
+      <div>
+        <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
+          <span className="bg-primary/15 text-primary ring-primary/15 inline-flex size-10 items-center justify-center rounded-2xl ring-1">
+            <Salad className="size-5" strokeWidth={2.25} aria-hidden />
+          </span>
+          Nutrition
+        </h1>
+        <p className="text-muted-foreground mt-2 text-sm">
+          Log meals and track daily macros.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setDayKey(prevDay)}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "border-primary/20 min-h-11 gap-1.5"
+          )}
         >
-          <option value="">From library…</option>
-          {library.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Meal name"
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        />
-      </div>
-      <div className="grid grid-cols-4 gap-2">
-        <input
-          value={calories}
-          onChange={(e) => setCalories(e.target.value)}
-          inputMode="numeric"
-          placeholder="kcal"
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-        />
-        <input
-          value={proteinG}
-          onChange={(e) => setProteinG(e.target.value)}
-          inputMode="decimal"
-          placeholder="P (g)"
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-        />
-        <input
-          value={carbsG}
-          onChange={(e) => setCarbsG(e.target.value)}
-          inputMode="decimal"
-          placeholder="C (g)"
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-        />
-        <input
-          value={fatG}
-          onChange={(e) => setFatG(e.target.value)}
-          inputMode="decimal"
-          placeholder="F (g)"
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-        />
-      </div>
-      <button className="w-full rounded-md bg-primary text-primary-foreground py-2 text-sm">
-        Log meal
-      </button>
-    </form>
-  );
-}
-
-function MealsList({
-  meals,
-  onDelete,
-  onToggle,
-  expandedId,
-}: {
-  meals: { id: string; name: string; loggedAt: number }[];
-  onDelete: (id: string) => Promise<void>;
-  onToggle: (id: string) => void;
-  expandedId: string | null;
-}) {
-  if (meals.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">No meals logged today.</p>
-    );
-  }
-  return (
-    <ul className="space-y-2">
-      {meals.map((m) => (
-        <li key={m.id} className="rounded-xl border bg-card">
-          <button
-            onClick={() => onToggle(m.id)}
-            className="w-full flex items-center justify-between p-3 text-left"
-          >
-            <div>
-              <div className="font-medium">{m.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {new Date(m.loggedAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-            </div>
+          <ChevronLeft className="size-4" aria-hidden />
+          Prev
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-medium">{formatDayLabel(dayKey)}</p>
+          {dayKey !== today ? (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm("Delete meal?")) void onDelete(m.id);
-              }}
-              className="text-xs text-destructive"
+              type="button"
+              onClick={() => setDayKey(today)}
+              className="text-primary text-xs font-medium underline-offset-4 hover:underline"
             >
-              Remove
+              Jump to today
             </button>
-          </button>
-          {expandedId === m.id ? <MealDetail mealId={m.id} /> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function MealDetail({ mealId }: { mealId: string }) {
-  const { data: entries } = useMealEntries(mealId);
-  if (entries.length === 0)
-    return (
-      <div className="px-3 pb-3 text-xs text-muted-foreground">
-        No entries.
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDayKey(nextDay)}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "border-primary/20 min-h-11 gap-1.5"
+          )}
+        >
+          Next
+          <ChevronRight className="size-4" aria-hidden />
+        </button>
       </div>
-    );
-  const totals = entries.reduce(
-    (acc, e) => ({
-      calories: acc.calories + e.calories,
-      proteinG: acc.proteinG + e.proteinG,
-      carbsG: acc.carbsG + e.carbsG,
-      fatG: acc.fatG + e.fatG,
-    }),
-    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
-  );
-  return (
-    <div className="px-3 pb-3 space-y-1">
-      <ul className="text-sm space-y-1">
-        {entries.map((e) => (
-          <li key={e.id} className="flex justify-between">
-            <span>{e.description}</span>
-            <span className="text-muted-foreground">
-              {e.calories} kcal · P{e.proteinG} C{e.carbsG} F{e.fatG}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="border-t pt-1 text-xs text-muted-foreground flex justify-between">
-        <span>Total</span>
-        <span>
-          {totals.calories} kcal · P{totals.proteinG} C{totals.carbsG} F
-          {totals.fatG}
-        </span>
+
+      <section className="border-primary/15 bg-card rounded-xl border p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">Day totals</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="border-chart-2/25 bg-chart-2/5 rounded-lg border p-3">
+            <p className="text-chart-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Flame className="size-3.5 shrink-0" aria-hidden />
+              Calories
+            </p>
+            <p className="text-chart-2 mt-1 text-2xl font-semibold tabular-nums">
+              {Math.round(totals.calories)}
+            </p>
+            <p className="text-chart-2/80 mt-0.5 text-xs">kcal</p>
+          </div>
+          <div className="border-chart-1/25 bg-chart-1/5 rounded-lg border p-3">
+            <p className="text-chart-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Beef className="size-3.5 shrink-0" aria-hidden />
+              Protein
+            </p>
+            <p className="text-chart-1 mt-1 text-2xl font-semibold tabular-nums">
+              {Math.round(totals.proteinG)}
+              <span className="text-chart-1/80 ml-0.5 text-sm">g</span>
+            </p>
+          </div>
+          <div className="border-chart-4/25 bg-chart-4/5 rounded-lg border p-3">
+            <p className="text-chart-4 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Wheat className="size-3.5 shrink-0" aria-hidden />
+              Carbs
+            </p>
+            <p className="text-chart-4 mt-1 text-2xl font-semibold tabular-nums">
+              {Math.round(totals.carbsG)}
+              <span className="text-chart-4/80 ml-0.5 text-sm">g</span>
+            </p>
+          </div>
+          <div className="border-chart-3/25 bg-chart-3/5 rounded-lg border p-3">
+            <p className="text-chart-3 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <Droplets className="size-3.5 shrink-0" aria-hidden />
+              Fat
+            </p>
+            <p className="text-chart-3 mt-1 text-2xl font-semibold tabular-nums">
+              {Math.round(totals.fatG)}
+              <span className="text-chart-3/80 ml-0.5 text-sm">g</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,22rem)] md:items-start">
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">
+            {dayKey === today ? "Today's log" : "Logged"}
+          </h2>
+          <FoodLogList meals={meals} />
+        </section>
+        <LogFoodForm dayKey={dayKey} />
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <Link
+          to="/app/nutrition/library"
+          className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+        >
+          Manage recipe library →
+        </Link>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
  * funnels through `authFetch`; a 401 triggers a single refresh attempt and
  * retry. Refreshes are serialized so concurrent requests don't race.
  */
+import { isDevForceOffline } from "@/lib/client/dev-force-offline";
 import {
   clearTokens,
   loadTokens,
@@ -10,11 +11,19 @@ import {
   type StoredTokenBundle,
 } from "./token-storage";
 
+function isEffectivelyOnline(): boolean {
+  if (isDevForceOffline()) return false;
+  return typeof navigator === "undefined" || navigator.onLine;
+}
+
 let refreshInFlight: Promise<StoredTokenBundle | null> | null = null;
 
 async function refreshOnce(): Promise<StoredTokenBundle | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
+    if (!isEffectivelyOnline()) {
+      return null;
+    }
     const existing = await loadTokens();
     if (!existing) return null;
     try {
@@ -48,12 +57,17 @@ export async function authFetch(
   let tokens = await loadTokens();
   if (tokens) {
     if (tokens.accessExpiresAt - 30_000 < Date.now()) {
-      tokens = (await refreshOnce()) ?? tokens;
+      if (isEffectivelyOnline()) {
+        tokens = (await refreshOnce()) ?? tokens;
+      }
     }
     headers.set("Authorization", `Bearer ${tokens.accessToken}`);
   }
   const res = await fetch(input, { ...init, headers });
   if (res.status !== 401) return res;
+  if (!isEffectivelyOnline()) {
+    return res;
+  }
   const rotated = await refreshOnce();
   if (!rotated) return res;
   const retryHeaders = new Headers(init.headers);

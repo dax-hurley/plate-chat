@@ -1,3 +1,4 @@
+import { formatProfileSexForCoach } from "@/lib/profile-demographics";
 import {
   goalPresetLabel,
   goalPresetValidValuesForAi,
@@ -16,6 +17,9 @@ export function formatProfileForCoachPrompt(p: UserProfileBundle): string {
     goalPresetValidValuesForAi(),
     `- Name: ${p.name?.trim() ? p.name.trim() : "(not set)"}`,
     `- Height (in): ${p.heightIn != null && Number.isFinite(p.heightIn) ? String(p.heightIn) : "(not set)"}`,
+    `- Sex: ${formatProfileSexForCoach(p.sex)}`,
+    `- Activity level: ${p.activityLevel ?? "(not set)"}`,
+    `- Age (years): ${p.ageYears != null ? String(p.ageYears) : "(not set)"}`,
     `- Primary fitness goal (preset): ${goalPresetLabel(p.goalPreset)}`,
     `- ${goalsLine}`,
     `- Preferences (food, equipment, etc.): ${p.preferences?.trim() ? p.preferences.trim() : "(not set)"}`,

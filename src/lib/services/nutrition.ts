@@ -37,7 +37,7 @@ export async function createMeal(
     dayKey: string;
     name: string;
     loggedAt?: Date;
-    /** When logging from the meal library / plan quick-add. */
+    /** When logging from the recipe library / plan quick-add. */
     sourceLibraryItemId?: string | null;
   }
 ) {

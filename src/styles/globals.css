@@ -47,8 +47,11 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Trainlog: cool mint-tinted canvas, teal primary (light); grey + light green (dark) */
+/* PlateChat: cool mint-tinted canvas, teal primary (light); grey + light green (dark) */
+/* Font stacks — pair with Google Fonts in __root (same families as 53bda21 `next/font` Plus_Jakarta_Sans + Geist_Mono) */
 :root {
+  --font-plus-jakarta: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, monospace;
   --background: oklch(0.97 0.014 200);
   --foreground: oklch(0.26 0.045 265);
   --card: oklch(0.995 0.006 200);

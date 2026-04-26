@@ -1,99 +1,52 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { authClient } from "@/lib/client/auth-client";
-import { bootstrapDeviceSession } from "@/lib/client/bootstrap-session";
-import { useOnline } from "@/lib/client/use-online";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { LogIn } from "lucide-react";
+import { z } from "zod";
+
+import { SanitizeLoginUrl } from "@/components/auth/sanitize-login-url";
+import { LoginForm } from "@/components/auth/login-form";
+import { BrandMark } from "@/components/app/brand-mark";
+import { AuthThemeMenu } from "@/components/theme-appearance";
+
+const searchSchema = z.object({
+  callbackUrl: z.string().optional(),
+});
 
 export const Route = createFileRoute("/login")({
+  validateSearch: searchSchema,
   component: LoginPage,
 });
 
 function LoginPage() {
-  const navigate = useNavigate();
-  const online = useOnline();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await authClient.signIn.email({ email, password });
-      if (!res.data?.user?.id) {
-        setError(res.error?.message ?? "Sign-in failed");
-        return;
-      }
-      await bootstrapDeviceSession({ userId: res.data.user.id });
-      await navigate({ to: "/app" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { callbackUrl } = Route.useSearch();
 
   return (
-    <div className="auth-shell min-h-dvh flex items-center justify-center p-6">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 bg-card border rounded-2xl p-6 shadow-sm"
-      >
-        <div>
-          <h1 className="text-2xl font-semibold">Sign in</h1>
-          <p className="text-sm text-muted-foreground">
-            A connection is required for first sign-in. After that the app
-            works offline.
+    <div className="auth-shell relative flex min-h-dvh flex-col justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <SanitizeLoginUrl />
+      <AuthThemeMenu />
+      <div className="mx-auto w-full max-w-sm space-y-8">
+        <div className="text-center">
+          <div className="mb-4 flex justify-center">
+            <BrandMark className="size-14 [&_svg]:size-8 shadow-md shadow-primary/20" />
+          </div>
+          <h1 className="flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight">
+            <LogIn className="text-primary size-7 shrink-0" aria-hidden />
+            Welcome back
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Sign in to continue your training log
           </p>
         </div>
-        {!online ? (
-          <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
-            You&apos;re offline. Reconnect to sign in.
-          </div>
-        ) : null}
-        <label className="block">
-          <span className="text-sm">Email</span>
-          <input
-            className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Password</span>
-          <input
-            className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={loading || !online}
-          className="w-full rounded-md bg-primary text-primary-foreground py-2 font-medium disabled:opacity-60"
-        >
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-        <p className="text-sm text-center text-muted-foreground">
+        <LoginForm callbackUrl={callbackUrl} />
+        <p className="text-muted-foreground text-center text-sm">
           No account?{" "}
-          <Link to="/register" className="text-primary hover:underline">
+          <Link
+            to="/register"
+            className="text-primary min-h-11 inline-flex items-center font-medium underline-offset-4 hover:underline"
+          >
             Create one
           </Link>
         </p>
-      </form>
+      </div>
     </div>
   );
 }

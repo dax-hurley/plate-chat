@@ -1,39 +1,63 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Trash2,
+} from "lucide-react";
+
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   useScheduledItems,
   useScheduleMutations,
-} from "@/lib/stores/schedule";
-import { useWorkoutTemplates } from "@/lib/stores/workouts";
+} from "@/lib/stores";
+import { useWorkoutTemplates } from "@/lib/stores";
+import {
+  calendarMonthGrid,
+  formatDayKey,
+  formatMonthKey,
+  monthDayKeyRange,
+  nextMonthKey,
+  parseMonthKey,
+  prevMonthKey,
+} from "@/lib/date-key";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/workouts/calendar")({
   component: WorkoutCalendar,
 });
 
-function pad(n: number) {
-  return n.toString().padStart(2, "0");
-}
-function dayKey(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function monthDisplayLabel(monthKey: string): string {
+  const p = parseMonthKey(monthKey);
+  if (!p) return monthKey;
+  return new Date(p.year, p.month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function WorkoutCalendar() {
-  const [anchor, setAnchor] = useState(() => new Date());
-  const { startKey, endKey, days } = useMemo(() => {
-    const start = new Date(anchor);
-    start.setDate(start.getDate() - start.getDay());
-    const end = new Date(start);
-    end.setDate(start.getDate() + 27);
-    const days: Date[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      days.push(new Date(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return { startKey: dayKey(start), endKey: dayKey(end), days };
-  }, [anchor]);
+  const [monthKey, setMonthKey] = useState(() => formatMonthKey());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const { data: items } = useScheduledItems(startKey, endKey);
+  const weeks = useMemo(() => calendarMonthGrid(monthKey), [monthKey]);
+  const range = useMemo(() => monthDayKeyRange(monthKey), [monthKey]);
+
+  const { data: scheduled } = useScheduledItems(
+    range?.first ?? formatDayKey(),
+    range?.last ?? formatDayKey()
+  );
   const { data: templates } = useWorkoutTemplates();
   const { scheduleTemplate, unschedule } = useScheduleMutations();
 
@@ -44,143 +68,216 @@ function WorkoutCalendar() {
   }, [templates]);
 
   const byDay = useMemo(() => {
-    const m = new Map<string, typeof items>();
-    for (const it of items) {
-      const arr = m.get(it.dayKey) ?? [];
-      arr.push(it);
-      m.set(it.dayKey, arr);
+    const m = new Map<string, typeof scheduled>();
+    for (const s of scheduled) {
+      const arr = m.get(s.dayKey) ?? [];
+      arr.push(s);
+      m.set(s.dayKey, arr);
     }
     return m;
-  }, [items]);
+  }, [scheduled]);
 
-  const [pickerDay, setPickerDay] = useState<string | null>(null);
+  const today = formatDayKey();
+  const effectiveDay = selectedDay ?? today;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Link to="/app/workouts" className="text-sm text-muted-foreground">
-          ← Back to routines
-        </Link>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const d = new Date(anchor);
-              d.setDate(d.getDate() - 28);
-              setAnchor(d);
-            }}
-            className="rounded-md border px-2 py-1 text-sm"
-          >
-            ←
-          </button>
-          <div className="text-sm">
-            {days[0].toLocaleDateString()} – {days[days.length - 1].toLocaleDateString()}
-          </div>
-          <button
-            onClick={() => {
-              const d = new Date(anchor);
-              d.setDate(d.getDate() + 28);
-              setAnchor(d);
-            }}
-            className="rounded-md border px-2 py-1 text-sm"
-          >
-            →
-          </button>
+    <div className="mx-auto w-full max-w-xl space-y-6 sm:max-w-5xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
+            <span className="bg-primary/15 text-primary ring-primary/15 inline-flex size-10 items-center justify-center rounded-2xl ring-1">
+              <CalendarDays
+                className="size-5"
+                strokeWidth={2.25}
+                aria-hidden
+              />
+            </span>
+            Calendar
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Schedule workouts and review what you&apos;ve planned this month.
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-xs text-muted-foreground">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="text-center py-1">
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-primary/20 min-h-11 gap-1.5"
+          onClick={() => setMonthKey(prevMonthKey(monthKey))}
+        >
+          <ChevronLeft className="size-4" aria-hidden />
+          Prev
+        </Button>
+        <p className="text-sm font-medium">{monthDisplayLabel(monthKey)}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-primary/20 min-h-11 gap-1.5"
+          onClick={() => setMonthKey(nextMonthKey(monthKey))}
+        >
+          Next
+          <ChevronRight className="size-4" aria-hidden />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-xs font-medium tracking-wide uppercase text-muted-foreground">
+        {WEEKDAY_LABELS.map((d) => (
+          <div key={d} className="py-1 text-center">
             {d}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
-        {days.map((d) => {
-          const key = dayKey(d);
-          const scheduled = byDay.get(key) ?? [];
-          const today = key === dayKey(new Date());
-          return (
-            <button
-              key={key}
-              onClick={() => setPickerDay(key)}
-              className={
-                "rounded-md border min-h-20 p-1 text-left text-xs hover:bg-muted " +
-                (today ? "border-primary" : "")
-              }
-            >
-              <div className="font-medium">{d.getDate()}</div>
-              <div className="space-y-0.5">
-                {scheduled.map((s) => (
-                  <div
-                    key={s.id}
-                    className="rounded bg-primary/10 px-1 py-0.5 truncate"
-                  >
-                    {templateMap.get(s.templateId) ?? "Workout"}
-                  </div>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {weeks ? (
+        <div className="grid grid-cols-7 gap-1">
+          {weeks.flat().map((cell) => {
+            const isToday = cell.dayKey === today;
+            const isSelected = cell.dayKey === selectedDay;
+            const items = byDay.get(cell.dayKey) ?? [];
+            return (
+              <button
+                key={cell.dayKey}
+                type="button"
+                onClick={() => setSelectedDay(cell.dayKey)}
+                className={cn(
+                  "min-h-20 rounded-lg border p-1.5 text-left text-xs shadow-sm transition-colors",
+                  "bg-card hover:border-primary/40",
+                  !cell.inMonth && "opacity-40",
+                  isToday && "border-primary ring-1 ring-primary/30",
+                  isSelected && "ring-2 ring-primary"
+                )}
+              >
+                <div
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    isToday && "text-primary"
+                  )}
+                >
+                  {Number(cell.dayKey.slice(-2))}
+                </div>
+                <div className="mt-1 space-y-0.5">
+                  {items.slice(0, 3).map((s) => (
+                    <div
+                      key={s.id}
+                      className="bg-primary/12 text-primary truncate rounded px-1 py-0.5"
+                      title={templateMap.get(s.templateId) ?? "Workout"}
+                    >
+                      {templateMap.get(s.templateId) ?? "Workout"}
+                    </div>
+                  ))}
+                  {items.length > 3 ? (
+                    <div className="text-muted-foreground text-[0.65rem]">
+                      +{items.length - 3} more
+                    </div>
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
-      {pickerDay ? (
-        <div className="rounded-xl border bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium">{pickerDay}</h3>
-            <button
-              onClick={() => setPickerDay(null)}
-              className="text-xs text-muted-foreground"
-            >
-              Close
-            </button>
+      <Card className="border-primary/15">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Dumbbell className="text-primary size-4" aria-hidden />
+                {effectiveDay}
+              </CardTitle>
+              <CardDescription>Manage this day&apos;s plan.</CardDescription>
+            </div>
+            {selectedDay && selectedDay !== today ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedDay(null)}
+              >
+                Jump to today
+              </Button>
+            ) : null}
           </div>
-          <ul className="space-y-1">
-            {(byDay.get(pickerDay) ?? []).map((s) => (
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <ul className="space-y-2">
+            {(byDay.get(effectiveDay) ?? []).map((s) => (
               <li
                 key={s.id}
-                className="flex items-center justify-between text-sm"
+                className="border-primary/15 bg-card flex items-center justify-between gap-2 rounded-lg border p-2"
               >
-                <span>{templateMap.get(s.templateId) ?? "Workout"}</span>
-                <button
-                  onClick={() => unschedule(s.id)}
-                  className="text-xs text-destructive"
+                <Link
+                  to="/app/workouts/$id"
+                  params={{ id: s.templateId }}
+                  className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
                 >
+                  {templateMap.get(s.templateId) ?? "Workout"}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void unschedule(s.id)}
+                  className="text-destructive inline-flex items-center gap-1 text-xs hover:underline"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
                   Remove
                 </button>
               </li>
             ))}
+            {(byDay.get(effectiveDay) ?? []).length === 0 ? (
+              <li className="text-muted-foreground text-sm">
+                Nothing scheduled for this day.
+              </li>
+            ) : null}
           </ul>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
-              const tid = fd.get("templateId") as string;
+              const tid = String(fd.get("templateId") ?? "");
               if (!tid) return;
-              void scheduleTemplate(tid, pickerDay);
+              void scheduleTemplate(tid, effectiveDay);
               e.currentTarget.reset();
             }}
             className="flex gap-2"
           >
             <select
               name="templateId"
-              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+              className="border-input bg-background flex-1 rounded-md border px-3 py-2 text-sm"
+              disabled={templates.length === 0}
             >
-              <option value="">Schedule a workout…</option>
+              <option value="">
+                {templates.length === 0
+                  ? "No workouts yet"
+                  : "Schedule a workout…"}
+              </option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
             </select>
-            <button className="rounded-md bg-secondary px-3 py-2 text-sm">
+            <Button type="submit" variant="secondary">
               Add
-            </button>
+            </Button>
           </form>
-        </div>
-      ) : null}
+          {templates.length === 0 ? (
+            <Link
+              to="/app/workouts/new"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "w-full gap-2 text-sm"
+              )}
+            >
+              Create your first workout
+            </Link>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }

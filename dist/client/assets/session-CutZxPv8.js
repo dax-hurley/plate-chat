@@ -1,1 +1,0 @@
-import{r as s,l as u}from"./index-mbkg6w-7.js";function a(){const[r,n]=s.useState({userId:null,loading:!0,tokens:null});return s.useEffect(()=>{let e=!0;return u().then(t=>{e&&n({userId:t?.userId??null,loading:!1,tokens:t})}),()=>{e=!1}},[]),r}export{a as u};

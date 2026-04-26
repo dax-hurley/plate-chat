@@ -8,6 +8,17 @@ import {
   updateLocal,
 } from "@/lib/client/db/writes";
 import { newId, nowMs } from "./ids";
+import {
+  dedupeMealPlanDuplicates,
+  pickCanonicalMealPlanForWeek,
+} from "@/lib/client/meal-plan-canonical";
+import { pullSyncCollections } from "@/lib/client/db/sync";
+import {
+  addMealSlotForDay,
+  ensureDefaultSlotsForPlan,
+  removeMealSlot,
+  setPlanLibraryAssignmentsBySlotIds,
+} from "@/lib/client/meal-plan-ops";
 
 export interface MealPlan {
   id: string;
@@ -41,11 +52,7 @@ export function usePlanForWeek(weekStartDayKey: string) {
   return useLiveOne<MealPlan>(
     async () => {
       if (!db || !userId) return null;
-      const rows = (await db.mealPlans
-        .where("[userId+weekStartDayKey]")
-        .equals([userId, weekStartDayKey])
-        .toArray()) as unknown as MealPlan[];
-      return rows.find((r) => r.deletedAt === null) ?? null;
+      return pickCanonicalMealPlanForWeek(db, userId, weekStartDayKey);
     },
     [db, userId, weekStartDayKey]
   );
@@ -77,12 +84,27 @@ export function useMealPlanMutations() {
   const ensurePlan = useCallback(
     async (weekStartDayKey: string) => {
       if (!ready || !db || !userId) throw new Error("Not ready");
-      const existing = (await db.mealPlans
-        .where("[userId+weekStartDayKey]")
-        .equals([userId, weekStartDayKey])
-        .toArray()) as unknown as MealPlan[];
-      const alive = existing.find((r) => r.deletedAt === null);
-      if (alive) return alive.id;
+      await pullSyncCollections([
+        "mealLibraryItems",
+        "mealLibraryIngredients",
+        "mealPlans",
+        "mealPlanSlots",
+      ]);
+      let canonical = await pickCanonicalMealPlanForWeek(
+        db,
+        userId,
+        weekStartDayKey
+      );
+      if (canonical) {
+        await ensureDefaultSlotsForPlan(db, userId, canonical.id);
+        await dedupeMealPlanDuplicates(
+          db,
+          userId,
+          weekStartDayKey,
+          canonical.id
+        );
+        return canonical.id;
+      }
       const id = newId();
       await insertLocal(db.mealPlans, {
         id,
@@ -92,7 +114,73 @@ export function useMealPlanMutations() {
         aiShoppingListJson: "[]",
         shoppingListSourceHash: null,
       });
+      await ensureDefaultSlotsForPlan(db, userId, id);
+      canonical = await pickCanonicalMealPlanForWeek(
+        db,
+        userId,
+        weekStartDayKey
+      );
+      if (canonical && canonical.id !== id) {
+        const slotRows = await db.mealPlanSlots
+          .where("planId")
+          .equals(id)
+          .toArray();
+        await db.transaction("rw", db.mealPlanSlots, db.mealPlans, async () => {
+          for (const s of slotRows) {
+            await db.mealPlanSlots.delete(s.id);
+          }
+          await db.mealPlans.delete(id);
+        });
+        await dedupeMealPlanDuplicates(
+          db,
+          userId,
+          weekStartDayKey,
+          canonical.id
+        );
+        return canonical.id;
+      }
+      await dedupeMealPlanDuplicates(db, userId, weekStartDayKey, id);
       return id;
+    },
+    [db, ready, userId]
+  );
+
+  const addMealPlanSlot = useCallback(
+    async (
+      weekStartDayKey: string,
+      dayIndex: number,
+      kind: "meal" | "snack"
+    ) => {
+      if (!ready || !db || !userId) throw new Error("Not ready");
+      await addMealSlotForDay(db, userId, {
+        weekStartDayKey,
+        dayIndex,
+        kind,
+      });
+    },
+    [db, ready, userId]
+  );
+
+  const removeMealPlanSlot = useCallback(
+    async (slotId: string) => {
+      if (!ready || !db || !userId) throw new Error("Not ready");
+      await removeMealSlot(db, userId, slotId);
+    },
+    [db, ready, userId]
+  );
+
+  const saveMealPlanLibraryAssignments = useCallback(
+    async (
+      planId: string,
+      assignments: { slotId: string; libraryItemId: string | null }[]
+    ) => {
+      if (!ready || !db || !userId) throw new Error("Not ready");
+      await setPlanLibraryAssignmentsBySlotIds(
+        db,
+        userId,
+        planId,
+        assignments
+      );
     },
     [db, ready, userId]
   );
@@ -116,6 +204,16 @@ export function useMealPlanMutations() {
       const alive = matches.find((r) => r.deletedAt === null);
       if (alive) {
         await updateLocal(db.mealPlanSlots, alive.id, {
+          slotKind: input.slotKind,
+          label: input.label,
+          libraryItemId: input.libraryItemId,
+        });
+        return;
+      }
+      const tomb = matches.find((r) => r.deletedAt != null);
+      if (tomb) {
+        await updateLocal(db.mealPlanSlots, tomb.id, {
+          deletedAt: null,
           slotKind: input.slotKind,
           label: input.label,
           libraryItemId: input.libraryItemId,
@@ -150,5 +248,12 @@ export function useMealPlanMutations() {
     [db, ready]
   );
 
-  return { ensurePlan, setSlotMeal, clearSlot };
+  return {
+    ensurePlan,
+    setSlotMeal,
+    clearSlot,
+    addMealPlanSlot,
+    removeMealPlanSlot,
+    saveMealPlanLibraryAssignments,
+  };
 }

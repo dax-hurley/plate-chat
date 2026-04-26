@@ -102,6 +102,7 @@ export async function createLibraryItem(
   if (lines.length > 0) {
     await db.insert(mealLibraryIngredients).values(
       lines.map((line, sortOrder) => ({
+        userId,
         libraryItemId: row.id,
         sortOrder,
         line,
@@ -152,6 +153,7 @@ export async function updateLibraryItem(
   if (lines.length > 0) {
     await db.insert(mealLibraryIngredients).values(
       lines.map((line, sortOrder) => ({
+        userId,
         libraryItemId: id,
         sortOrder,
         line,
