@@ -1,8 +1,8 @@
 # Deploy TanStack Start to AWS with SST v4 (multiple stages).
 #
-# Stages: `staging` and `production` (SST `--stage` / stack isolation).
+# Stages: `staging` and `prod` (SST `--stage` / stack isolation).
 #
-# GitHub Environments (Settings → Environments): create `staging` and `production`.
+# GitHub Environments (Settings → Environments): create `staging` and `prod`.
 # Put deploy secrets on each environment with the SAME names so one workflow fits both:
 #   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, BETTER_AUTH_SECRET, APP_URL, ANTHROPIC_API_KEY
 # Optional per environment: override repository variable AWS_REGION.
@@ -12,11 +12,11 @@
 #   (environment secrets override repository secrets when the job uses `environment:`).
 #
 # Triggers:
-#   • push to `main`     → deploy production
+#   • push to `main`     → deploy prod
 #   • push to `staging` or `develop` → deploy staging
-#   • workflow_dispatch  → choose staging or production
+#   • workflow_dispatch  → choose staging or prod
 #
-# ANTHROPIC_API_KEY is required for production deploys; optional for staging (coach/list features
+# ANTHROPIC_API_KEY is required for prod deploys; optional for staging (coach/list features
 # return 503 if unset — fine for infra-only staging).
 #
 # GitHub OIDC setup:
@@ -34,7 +34,7 @@ on:
         default: staging
         options:
           - staging
-          - production
+          - prod
   push:
     branches:
       - main
@@ -59,7 +59,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             STAGE="${{ inputs.stage }}"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            STAGE=production
+            STAGE=prod
           elif [ "${{ github.ref }}" = "refs/heads/staging" ] || [ "${{ github.ref }}" = "refs/heads/develop" ]; then
             STAGE=staging
           else
@@ -107,8 +107,8 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          if [ "${STAGE}" = "production" ] && [ -z "${AnthropicApiKey:-}" ]; then
-            echo "::error::Production deploy requires ANTHROPIC_API_KEY on the production environment."
+          if [ "${STAGE}" = "prod" ] && [ -z "${AnthropicApiKey:-}" ]; then
+            echo "::error::Prod deploy requires ANTHROPIC_API_KEY on the prod environment."
             exit 1
           fi
           secrets_file="$(mktemp)"

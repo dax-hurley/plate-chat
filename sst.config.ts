@@ -5,15 +5,15 @@
  * Production secrets: SST secret names below map to env vars on `Web` (see `run()`).
  *
  * GitHub Actions deploy (`.github/workflows/deploy.yml`) syncs secrets per stage (`staging`,
- * `production`) from GitHub Environments with the same names, then `sst deploy --stage …`.
+ * `prod`) from GitHub Environments with the same names, then `sst deploy --stage …`.
  * Override from a machine anytime, e.g.:
  *
  *   npx sst secret set --stage staging TursoDatabaseUrl "libsql://..."
- *   npx sst secret set --stage production TursoDatabaseUrl "libsql://..."
- *   npx sst secret set --stage production TursoAuthToken   "..."
- *   npx sst secret set --stage production BetterAuthSecret "$(openssl rand -base64 32)"
- *   npx sst secret set --stage production AppUrl           "https://…"
- *   npx sst secret set --stage production AnthropicApiKey  "sk-ant-..."
+ *   npx sst secret set --stage prod TursoDatabaseUrl "libsql://..."
+ *   npx sst secret set --stage prod TursoAuthToken   "..."
+ *   npx sst secret set --stage prod BetterAuthSecret "$(openssl rand -base64 32)"
+ *   npx sst secret set --stage prod AppUrl           "https://…"
+ *   npx sst secret set --stage prod AnthropicApiKey  "sk-ant-..."
  *
  * NextAuth-era secrets (`AuthSecret`, `AuthUrl`) are no longer used — better-auth
  * + device tokens replace them.
@@ -22,8 +22,8 @@ export default $config({
   app(input) {
     return {
       name: "workout-app",
-      removal: input?.stage === "production" ? "retain" : "remove",
-      protect: ["production"].includes(input?.stage),
+      removal: input?.stage === "prod" ? "retain" : "remove",
+      protect: ["prod"].includes(input?.stage),
       home: "aws",
     };
   },
