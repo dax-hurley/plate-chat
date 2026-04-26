@@ -1,18 +1,23 @@
-# Deploy the Next.js app to AWS with SST (Ion).
+# Deploy TanStack Start to AWS with SST v4 (multiple stages).
 #
-# Repository secrets (Settings → Secrets and variables → Actions):
-#   AWS_ROLE_ARN          — IAM role for GitHub OIDC → AWS (deploy)
-#   TURSO_DATABASE_URL    — libsql://… (SST secret TursoDatabaseUrl)
-#   TURSO_AUTH_TOKEN      — Turso token (SST secret TursoAuthToken)
-#   AUTH_SECRET           — NextAuth signing secret (SST secret AuthSecret)
-#   AUTH_URL              — public app URL, https (SST secret AuthUrl)
-#   ANTHROPIC_API_KEY     — Claude (coach + AI shopping list); required in prod
+# Stages: `staging` and `production` (SST `--stage` / stack isolation).
 #
-# Optional (set via `npx sst secret set` or Lambda env if you use Turso Platform for per-user DBs):
-#   TURSO_PLATFORM_API_TOKEN, TURSO_ORG_SLUG, TURSO_GROUP_NAME — see sst.config.ts header
+# GitHub Environments (Settings → Environments): create `staging` and `production`.
+# Put deploy secrets on each environment with the SAME names so one workflow fits both:
+#   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, BETTER_AUTH_SECRET, APP_URL, ANTHROPIC_API_KEY
+# Optional per environment: override repository variable AWS_REGION.
 #
-# Each deploy runs `sst secret load` then `sst deploy`. Override locally anytime with
-# `npx sst secret set --stage production …` if needed.
+# Repository secret (any environment): AWS_ROLE_ARN — IAM role for GitHub OIDC → AWS.
+#   If staging uses a different AWS account, add AWS_ROLE_ARN to that environment’s secrets
+#   (environment secrets override repository secrets when the job uses `environment:`).
+#
+# Triggers:
+#   • push to `main`     → deploy production
+#   • push to `staging` or `develop` → deploy staging
+#   • workflow_dispatch  → choose staging or production
+#
+# ANTHROPIC_API_KEY is required for production deploys; optional for staging (coach/list features
+# return 503 if unset — fine for infra-only staging).
 #
 # GitHub OIDC setup:
 # https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
@@ -21,17 +26,54 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: SST stage (use a GitHub Environment with the same name)
+        type: choice
+        required: true
+        default: staging
+        options:
+          - staging
+          - production
   push:
-    branches: [main]
+    branches:
+      - main
+      - staging
+      - develop
 
 concurrency:
-  group: deploy-${{ github.workflow }}
+  # workflow_dispatch: include chosen stage so two manual deploys (same branch) do not cancel each other.
+  group: deploy-${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.stage || 'push' }}
   cancel-in-progress: false
 
 jobs:
-  production:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.pick.outputs.stage }}
+    steps:
+      - name: Resolve SST stage
+        id: pick
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            STAGE=production
+          elif [ "${{ github.ref }}" = "refs/heads/staging" ] || [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            STAGE=staging
+          else
+            echo "::error::Unsupported ref for deploy: ${{ github.ref }}"
+            exit 1
+          fi
+          echo "stage=${STAGE}" >> "$GITHUB_OUTPUT"
+          echo "Resolved SST stage: ${STAGE}"
+
+  deploy:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: ${{ needs.resolve.outputs.stage }}
     permissions:
       id-token: write
       contents: read
@@ -50,36 +92,36 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          # Match the region you use with SST/AWS; set repository variable AWS_REGION if not us-east-1.
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Sync GitHub secrets to SST
         env:
+          STAGE: ${{ needs.resolve.outputs.stage }}
           TursoDatabaseUrl: ${{ secrets.TURSO_DATABASE_URL }}
           TursoAuthToken: ${{ secrets.TURSO_AUTH_TOKEN }}
-          AuthSecret: ${{ secrets.AUTH_SECRET }}
-          AuthUrl: ${{ secrets.AUTH_URL }}
+          BetterAuthSecret: ${{ secrets.BETTER_AUTH_SECRET }}
+          AppUrl: ${{ secrets.APP_URL }}
           AnthropicApiKey: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
-          if [ -z "${AnthropicApiKey:-}" ]; then
-            echo "::error::Set repository secret ANTHROPIC_API_KEY (Claude is required in production)."
+          if [ "${STAGE}" = "prod" ] && [ -z "${AnthropicApiKey:-}" ]; then
+            echo "::error::Production deploy requires ANTHROPIC_API_KEY on the production environment."
             exit 1
           fi
           secrets_file="$(mktemp)"
           {
             echo "TursoDatabaseUrl=${TursoDatabaseUrl}"
             echo "TursoAuthToken=${TursoAuthToken}"
-            echo "AuthSecret=${AuthSecret}"
-            echo "AuthUrl=${AuthUrl}"
+            echo "BetterAuthSecret=${BetterAuthSecret}"
+            echo "AppUrl=${AppUrl}"
             echo "AnthropicApiKey=${AnthropicApiKey}"
           } >"$secrets_file"
-          npx sst secret load "$secrets_file" --stage production
+          npx sst secret load "$secrets_file" --stage "${STAGE}"
           rm -f "$secrets_file"
 
       - name: Deploy to AWS (SST)
-        run: npx sst deploy --stage production
         env:
-          # Optional: avoid OOM on large Next builds in CI.
+          STAGE: ${{ needs.resolve.outputs.stage }}
           NODE_OPTIONS: --max-old-space-size=6144
+        run: npx sst deploy --stage "${STAGE}"

@@ -4,10 +4,11 @@
 /**
  * Production secrets: SST secret names below map to env vars on `Web` (see `run()`).
  *
- * GitHub Actions deploy (`.github/workflows/deploy.yml`) runs `sst secret load`
- * from repository secrets before `sst deploy`. You can still set / override from
- * a machine:
+ * GitHub Actions deploy (`.github/workflows/deploy.yml`) syncs secrets per stage (`staging`,
+ * `production`) from GitHub Environments with the same names, then `sst deploy --stage …`.
+ * Override from a machine anytime, e.g.:
  *
+ *   npx sst secret set --stage staging TursoDatabaseUrl "libsql://..."
  *   npx sst secret set --stage production TursoDatabaseUrl "libsql://..."
  *   npx sst secret set --stage production TursoAuthToken   "..."
  *   npx sst secret set --stage production BetterAuthSecret "$(openssl rand -base64 32)"
