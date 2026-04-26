@@ -34,7 +34,7 @@ export default $config({
     const appUrl = new sst.Secret("AppUrl");
     const anthropicApiKey = new sst.Secret("AnthropicApiKey");
 
-    new sst.aws.TanStackStart("Web", {
+    const web = new sst.aws.TanStackStart("Web", {
       link: [
         tursoUrl,
         tursoToken,
@@ -52,5 +52,10 @@ export default $config({
         VITE_API_URL: appUrl.value,
       },
     });
+
+    // Exposed in `sst state export` / deploy summary (GitHub Actions reads this).
+    return {
+      cloudfrontUrl: web.url,
+    };
   },
 });

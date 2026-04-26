@@ -74,6 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ needs.resolve.outputs.stage }}
+    outputs:
+      cloudfront_url: ${{ steps.cloudfront.outputs.url }}
     permissions:
       id-token: write
       contents: read
@@ -105,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          if [ "${STAGE}" = "prod" ] && [ -z "${AnthropicApiKey:-}" ]; then
+          if [ "${STAGE}" = "production" ] && [ -z "${AnthropicApiKey:-}" ]; then
             echo "::error::Production deploy requires ANTHROPIC_API_KEY on the production environment."
             exit 1
           fi
@@ -124,4 +126,39 @@ jobs:
         env:
           STAGE: ${{ needs.resolve.outputs.stage }}
           NODE_OPTIONS: --max-old-space-size=6144
-        run: npx sst deploy --stage "${STAGE}"
+        run: |
+          set -o pipefail
+          npx sst deploy --stage "${STAGE}" 2>&1 | tee sst-deploy.log
+
+      - name: CloudFront URL
+        id: cloudfront
+        env:
+          STAGE: ${{ needs.resolve.outputs.stage }}
+        run: |
+          set -euo pipefail
+          EXPORT="$(npx sst state export --stage "$STAGE")"
+          URL="$(printf '%s' "$EXPORT" | jq -r '
+            .deployment.outputs.cloudfrontUrl.value?
+            // .deployment.outputs.cloudfrontUrl?
+            // empty
+          ')"
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            URL="$(printf '%s' "$EXPORT" | jq -r '
+              .. | objects | select(has("cloudfrontUrl")) | .cloudfrontUrl
+              | if type == "string" then . else .value? // empty end
+            ' | head -n1)"
+          fi
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            URL="$(grep -oE 'https://[a-z0-9]+\.cloudfront\.net[^[:space:]]*' sst-deploy.log 2>/dev/null | tail -n1 || true)"
+          fi
+          if [ -z "$URL" ]; then
+            echo "::warning::Could not resolve CloudFront URL from SST state or deploy log."
+            exit 0
+          fi
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "::notice::CloudFront URL (${STAGE}): ${URL}"
+          {
+            echo "## Deploy — ${STAGE}"
+            echo
+            echo "**CloudFront URL:** ${URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
