@@ -8,7 +8,7 @@
     "clean": "bash scripts/clean.sh",
     "clean:dry": "bash scripts/clean.sh -n",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx src/scripts/run-migrations.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/scripts/seed.ts",
