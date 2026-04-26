@@ -17,22 +17,22 @@ import { drizzle } from "drizzle-orm/libsql/http";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { resolve } from "node:path";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
   console.error("DATABASE_URL is required");
   process.exit(1);
 }
 
 const authToken = process.env.DATABASE_AUTH_TOKEN;
 
-function createLibsqlClient() {
+function createLibsqlClient(url: string, token: string | undefined) {
   if (url.startsWith("file:") || url === ":memory:") {
-    return createFileClient({ url, authToken });
+    return createFileClient({ url, authToken: token });
   }
   if (/^wss?:/i.test(url)) {
-    return createWsClient({ url, authToken });
+    return createWsClient({ url, authToken: token });
   }
-  return createHttpClient({ url, authToken });
+  return createHttpClient({ url, authToken: token });
 }
 
 function printErr(err: unknown) {
@@ -43,7 +43,7 @@ function printErr(err: unknown) {
   }
 }
 
-const client = createLibsqlClient();
+const client = createLibsqlClient(databaseUrl, authToken);
 const db = drizzle(client);
 const migrationsFolder = resolve(process.cwd(), "drizzle");
 
