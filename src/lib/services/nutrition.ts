@@ -73,6 +73,7 @@ export async function addMealEntry(
   const [row] = await db
     .insert(mealEntries)
     .values({
+      userId,
       mealId: input.mealId,
       description: input.description?.trim() ?? "",
       calories: Math.round(input.calories),

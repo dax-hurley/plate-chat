@@ -127,7 +127,7 @@ export function useMealPlanMutations() {
           .toArray();
         await db.transaction("rw", db.mealPlanSlots, db.mealPlans, async () => {
           for (const s of slotRows) {
-            await db.mealPlanSlots.delete(s.id);
+            await db.mealPlanSlots.delete(s.id as string);
           }
           await db.mealPlans.delete(id);
         });

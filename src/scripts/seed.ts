@@ -148,6 +148,7 @@ async function main() {
   await db.insert(workoutTemplateItems).values([
     {
       id: crypto.randomUUID(),
+      userId,
       templateId,
       exerciseId: EX_BENCH,
       order: 0,
@@ -159,6 +160,7 @@ async function main() {
     },
     {
       id: crypto.randomUUID(),
+      userId,
       templateId,
       exerciseId: EX_SQUAT,
       order: 1,
@@ -170,6 +172,7 @@ async function main() {
     },
     {
       id: crypto.randomUUID(),
+      userId,
       templateId,
       exerciseId: EX_ROW,
       order: 2,
@@ -215,6 +218,7 @@ async function main() {
       for (let setIndex = 1; setIndex <= 3; setIndex++) {
         await db.insert(workoutSets).values({
           id: crypto.randomUUID(),
+          userId,
           sessionId,
           exerciseId: ex.exerciseId,
           setIndex,
@@ -248,6 +252,7 @@ async function main() {
     await db.insert(mealEntries).values([
       {
         id: crypto.randomUUID(),
+        userId,
         mealId: breakfastId,
         description: "Oats + eggs",
         calories: 520,
@@ -257,6 +262,7 @@ async function main() {
       },
       {
         id: crypto.randomUUID(),
+        userId,
         mealId: lunchId,
         description: "Chicken bowl",
         calories: 680,

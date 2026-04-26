@@ -999,6 +999,7 @@ export async function upsertSessionExercisePref(
   }
   if (w === null && d === null && dist === null) return;
   await db.insert(workoutSessionExercisePrefs).values({
+    userId,
     sessionId: input.sessionId,
     exerciseId: input.exerciseId,
     workingWeight: w,
@@ -1231,6 +1232,7 @@ export async function upsertWorkoutSet(
     const [row] = await db
       .insert(workoutSets)
       .values({
+        userId,
         sessionId: input.sessionId,
         exerciseId: input.exerciseId,
         setIndex: input.setIndex,
@@ -1311,6 +1313,7 @@ export async function upsertWorkoutSet(
     const [row] = await db
       .insert(workoutSets)
       .values({
+        userId,
         sessionId: input.sessionId,
         exerciseId: input.exerciseId,
         setIndex: input.setIndex,
@@ -1379,6 +1382,7 @@ export async function upsertWorkoutSet(
   const [row] = await db
     .insert(workoutSets)
     .values({
+      userId,
       sessionId: input.sessionId,
       exerciseId: input.exerciseId,
       setIndex: input.setIndex,
@@ -1821,7 +1825,7 @@ export async function skipRecurringOccurrence(
   if (!r) throw new Error("Rule not found");
   await db
     .insert(workoutRecurringSkips)
-    .values({ ruleId, dayKey: dk })
+    .values({ userId, ruleId, dayKey: dk })
     .onConflictDoNothing();
 }
 
