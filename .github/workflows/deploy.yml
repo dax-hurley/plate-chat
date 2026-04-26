@@ -90,6 +90,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Apply versioned SQL migrations to Turso (same DB as the app). Prefer this over
+      # `db:push` in CI: reproducible, reviewable, and matches drizzle/meta/_journal.json.
+      - name: Run database migrations (Drizzle → Turso)
+        env:
+          DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npm run db:migrate
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
