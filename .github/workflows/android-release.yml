@@ -1,0 +1,116 @@
+# Build the Capacitor Android APK and attach it to a GitHub Release for the same tag.
+#
+# Triggers: push a tag like v1.0.0, or run workflow manually and enter the tag to build.
+#
+# Configure (repository Settings → Variables and secrets):
+#   - Variable VITE_API_URL — public base URL the app in the APK should use for API calls
+#     (same idea as `sst` AppUrl, e.g. your CloudFront URL). If unset, the build falls
+#     back to http://127.0.0.1:3000 (same as CI) — fine for a dry run, not for real devices.
+# Build environment otherwise matches `.github/workflows/ci.yml` (local file DB, placeholders).
+
+name: Android release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to build (e.g. v1.0.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: android-release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Set tag and checkout ref
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            T="${{ inputs.tag }}"
+            T="${T#refs/tags/}"
+            echo "tag_name=${T}" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=refs/tags/${T}" >> "$GITHUB_OUTPUT"
+          else
+            T="${{ github.ref_name }}"
+            T="${T#refs/tags/}"
+            echo "tag_name=${T}" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.checkout_ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: android
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare local DB path
+        run: mkdir -p data
+
+      - name: Web build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          AUTH_SECRET: ci-placeholder-auth-secret-min-32-chars-long
+          BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-32ch-minimum
+          DATABASE_URL: file:./data/android-release-build.db
+          AUTH_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+          APP_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+          BETTER_AUTH_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+        run: npm run build
+
+      - name: Capacitor sync
+        run: npx cap sync
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Name artifact
+        id: out
+        run: |
+          TAG_NAME="${{ steps.meta.outputs.tag_name }}"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "PlateChat-${TAG_NAME}.apk"
+          echo "Wrote PlateChat-${TAG_NAME}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: "PlateChat ${{ steps.meta.outputs.tag_name }}"
+          files: "PlateChat-*.apk"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
