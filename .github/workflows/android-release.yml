@@ -134,9 +134,11 @@ jobs:
       - name: Prepare local DB path
         run: mkdir -p data
 
-      - name: Web build
+      - name: Web build (Capacitor)
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+          # Nitro `node-server` for a bootable `.output/server` (SSR snapshot only — APK uses static files).
+          CAPACITOR_WEB_BUILD: "1"
           AUTH_SECRET: ci-placeholder-auth-secret-min-32-chars-long
           BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-32ch-minimum
           DATABASE_URL: file:./data/android-release-build.db
@@ -145,7 +147,9 @@ jobs:
           BETTER_AUTH_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
           NEXT_PUBLIC_APP_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
           VITE_API_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
-        run: npm run build
+        run: |
+          npm run build
+          node scripts/ensure-capacitor-index-html.mjs
 
       - name: Capacitor sync
         run: npx cap sync

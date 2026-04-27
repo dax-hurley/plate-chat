@@ -11,7 +11,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "com.trainlog.app",
   appName: "PlateChat",
-  webDir: "dist/client",
+  /** Vite + Nitro client build output (TanStack Start), not `dist/client`. */
+  webDir: ".output/public",
   android: {
     allowMixedContent: false,
   },

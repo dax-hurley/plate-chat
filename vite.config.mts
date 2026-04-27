@@ -5,14 +5,23 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { nitro } from "nitro/vite";
 
+/** Capacitor needs a prerendered `index.html`; TanStack's prerender uses Vite preview, which only works with a Node-handled Nitro preset (not `aws-lambda`). Android CI sets this for `npm run build` only; SST deploy keeps the default Lambda preset. */
+const capacitorWeb =
+  process.env.CAPACITOR_WEB_BUILD === "1" || process.env.CAPACITOR_WEB_BUILD === "true";
+
 export default defineConfig({
+  define: {
+    "process.env.PLATECHAT_CAPACITOR_WEB_BUILD": JSON.stringify(
+      capacitorWeb ? "1" : "",
+    ),
+  },
   server: {
     port: 3001,
     host: "0.0.0.0",
   },
   nitro: {
-    preset: "aws-lambda",
-    awsLambda: { streaming: true },
+    preset: capacitorWeb ? "node-server" : "aws-lambda",
+    ...(capacitorWeb ? {} : { awsLambda: { streaming: true } }),
   },
   plugins: [
     viteTsConfigPaths({ projects: ["./tsconfig.json"] }),
