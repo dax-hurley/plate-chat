@@ -2,10 +2,16 @@
 #
 # Triggers: push a tag like v1.0.0, or run workflow manually and enter the tag to build.
 #
-# Configure (repository Settings → Variables and secrets):
-#   - Variable VITE_API_URL — public base URL the app in the APK should use for API calls
-#     (same idea as `sst` AppUrl, e.g. your CloudFront URL). If unset, the build falls
-#     back to http://127.0.0.1:3000 (same as CI) — fine for a dry run, not for real devices.
+# GitHub Environments (Settings → Environments): use the same names as web deploy (`staging`,
+# `prod`). Put **Variables** on each environment, e.g.:
+#   - VITE_API_URL — public HTTPS base the APK should use (CloudFront / app URL). If unset,
+#     the build falls back to http://127.0.0.1:3000 (dry run only, not for real devices).
+#
+# Environment selection:
+#   - workflow_dispatch: choose **stage** (staging | prod) — same idea as Deploy.
+#   - push tag v*: resolved from the tagged commit vs origin/main, origin/staging, origin/develop
+#     (tip match), then tag name heuristics (*-staging*, *-rc*, *beta* → staging); otherwise prod.
+#
 # Build environment otherwise matches `.github/workflows/ci.yml` (local file DB, placeholders).
 
 name: Android release
@@ -20,17 +26,26 @@ on:
         description: "Existing git tag to build (e.g. v1.0.0)"
         required: true
         type: string
+      stage:
+        description: "GitHub Environment (same as web deploy)"
+        type: choice
+        required: true
+        default: prod
+        options:
+          - staging
+          - prod
 
 concurrency:
-  group: android-release-${{ github.event.inputs.tag || github.ref }}
+  group: android-release-${{ github.workflow }}-${{ github.event.inputs.tag || github.ref }}-${{ github.event.inputs.stage || 'tag' }}
   cancel-in-progress: true
 
 jobs:
-  build-and-release:
+  resolve:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: write
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
     steps:
       - name: Set tag and checkout ref
         id: meta
@@ -50,6 +65,49 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.meta.outputs.checkout_ref }}
+          fetch-depth: 0
+
+      - name: Resolve GitHub Environment
+        id: pick
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ inputs.stage }}"
+          else
+            git fetch origin main staging develop 2>/dev/null || git fetch origin
+            HEAD_SHA=$(git rev-parse HEAD)
+            MAIN_SHA=$(git rev-parse origin/main 2>/dev/null || true)
+            STAGING_SHA=$(git rev-parse origin/staging 2>/dev/null || true)
+            DEVELOP_SHA=$(git rev-parse origin/develop 2>/dev/null || true)
+
+            if [ -n "$MAIN_SHA" ] && [ "$HEAD_SHA" = "$MAIN_SHA" ]; then
+              ENVIRONMENT=prod
+            elif [ -n "$STAGING_SHA" ] && [ "$HEAD_SHA" = "$STAGING_SHA" ]; then
+              ENVIRONMENT=staging
+            elif [ -n "$DEVELOP_SHA" ] && [ "$HEAD_SHA" = "$DEVELOP_SHA" ]; then
+              ENVIRONMENT=staging
+            elif [[ "$REF_NAME" == *-staging* ]] || [[ "$REF_NAME" == *-rc* ]] || [[ "$REF_NAME" == *beta* ]]; then
+              ENVIRONMENT=staging
+            else
+              ENVIRONMENT=prod
+            fi
+            echo "Resolved environment for tag ${REF_NAME}: ${ENVIRONMENT}"
+          fi
+          echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+
+  build-and-release:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ needs.resolve.outputs.environment }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -99,15 +157,15 @@ jobs:
       - name: Name artifact
         id: out
         run: |
-          TAG_NAME="${{ steps.meta.outputs.tag_name }}"
+          TAG_NAME="${{ needs.resolve.outputs.tag_name }}"
           cp android/app/build/outputs/apk/debug/app-debug.apk "PlateChat-${TAG_NAME}.apk"
           echo "Wrote PlateChat-${TAG_NAME}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag_name }}
-          name: "PlateChat ${{ steps.meta.outputs.tag_name }}"
+          tag_name: ${{ needs.resolve.outputs.tag_name }}
+          name: "PlateChat ${{ needs.resolve.outputs.tag_name }} (${{ needs.resolve.outputs.environment }})"
           files: "PlateChat-*.apk"
           generate_release_notes: true
         env:
