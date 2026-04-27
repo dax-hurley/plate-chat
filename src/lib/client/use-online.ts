@@ -1,17 +1,29 @@
+import { Capacitor } from "@capacitor/core";
 import { useEffect, useState } from "react";
 
 import { isDevForceOffline } from "@/lib/client/dev-force-offline";
 
-const HEALTH = "/api/health";
 const PROBE_MS = 25_000;
-const PROBE_TIMEOUT_MS = 5_000;
+/** Lambda cold starts can exceed a few seconds; short timeouts falsely mark the app offline. */
+const PROBE_TIMEOUT_MS = 15_000;
+
+function healthProbeUrl(): string {
+  if (Capacitor.isNativePlatform()) {
+    const base = import.meta.env.VITE_API_URL;
+    if (typeof base === "string" && base.trim() !== "") {
+      return `${base.replace(/\/$/, "")}/api/health`;
+    }
+  }
+  return "/api/health";
+}
 
 /**
  * Real connectivity: combines `navigator.onLine` (best-effort) with a
- * same-origin `GET /api/health` probe. `navigator.onLine` and `online` /
- * `offline` are unreliable in PWAs (e.g. standalone) and on some mobile
- * browsers, so we verify with a network request that the service worker does
- * not cache (see `vite.config` Workbox: `/api/health` is NetworkOnly).
+ * `GET /api/health` probe (same-origin on web; on Capacitor native, uses
+ * `VITE_API_URL` so the request hits the deployed API). `navigator.onLine` and
+ * `online` / `offline` are unreliable in PWAs (e.g. standalone) and on some
+ * mobile browsers, so we verify with a network request that the service worker
+ * does not cache (see `vite.config` Workbox: `/api/health` is NetworkOnly).
  */
 export function useOnline(): boolean {
   const [online, setOnline] = useState(() => {
@@ -39,7 +51,7 @@ export function useOnline(): boolean {
       const ac = new AbortController();
       const timeoutId = window.setTimeout(() => ac.abort(), PROBE_TIMEOUT_MS);
       try {
-        const res = await fetch(`${HEALTH}?t=${Date.now()}`, {
+        const res = await fetch(`${healthProbeUrl()}?t=${Date.now()}`, {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
