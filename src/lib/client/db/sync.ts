@@ -11,9 +11,9 @@
  * again between push and response), we keep local and retry next tick.
  *
  * A heartbeat + online/focus/visibility event listeners poke the runner. Writes also
- * call `triggerSync()` so pushes don't wait for the poll interval. Pull on
- * `visibilitychange` (visible) covers mobile and background tabs where `focus`
- * may not fire when the user returns after the coach updated server data.
+ * call `triggerSync()` so pushes don't wait for the poll interval. Pull runs only while
+ * the document is visible so background tabs don't hammer `/api/sync/*`; pushes still run
+ * so dirty rows flush. Full pull resumes when the tab becomes visible (`visibilitychange`).
  */
 import type { Table } from "dexie";
 import { isDevForceOffline } from "@/lib/client/dev-force-offline";
@@ -50,7 +50,8 @@ interface Checkpoint {
   id: string;
 }
 
-const POLL_MS = 30_000;
+/** Idle heartbeat interval — pulls every collection only while the tab is visible. */
+const POLL_MS = 120_000;
 const PULL_PAGE = 200;
 const PUSH_BATCH = 50;
 
@@ -72,6 +73,11 @@ export function getSyncingSnapshot(): boolean {
 export function subscribeSyncing(onChange: () => void): () => void {
   syncStateListeners.add(onChange);
   return () => syncStateListeners.delete(onChange);
+}
+
+function shouldPullRemoteChanges(): boolean {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible";
 }
 
 export function triggerSync() {
@@ -160,6 +166,7 @@ async function runCycle(): Promise<void> {
         const outcome = await pushCollection(db, name);
         if (outcome === "failed") pushFailed.add(name);
       }
+      if (!shouldPullRemoteChanges()) return;
       for (const name of collectionNames) {
         await pullCollection(db, name);
       }

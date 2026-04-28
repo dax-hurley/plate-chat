@@ -7,7 +7,7 @@
  * Requires env compatible with `npm run build` (DATABASE_URL, AUTH_*, etc.).
  */
 import { spawn } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +15,28 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir = path.join(root, ".output");
 const pub = path.join(outputDir, "public");
 const indexPath = path.join(pub, "index.html");
+
+let nitroJson;
+try {
+  nitroJson = JSON.parse(
+    await readFile(path.join(outputDir, "nitro.json"), "utf8"),
+  );
+} catch {
+  nitroJson = null;
+}
+
+const preset = nitroJson?.preset;
+if (preset !== "node-server") {
+  if (!nitroJson) {
+    throw new Error(
+      `Missing or invalid ${path.relative(root, path.join(outputDir, "nitro.json"))}: run "npm run build" first (with CAPACITOR_WEB_BUILD=1 for Capacitor).`,
+    );
+  }
+  throw new Error(
+    `Nitro preset is "${preset}"; local SSR requires "node-server". Rebuild with CAPACITOR_WEB_BUILD=1 (see vite.config.mts), then run this script again. ` +
+      `Do not run it after a default Lambda-target build.`,
+  );
+}
 
 const port = 41230 + Math.floor(Math.random() * 800);
 

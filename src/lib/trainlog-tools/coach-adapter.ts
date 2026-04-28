@@ -12,9 +12,6 @@ export function createSharedTrainlogTools(userId: string): ToolSet {
     acc[def.name] = tool({
       description: def.description,
       inputSchema: def.inputSchema,
-      providerOptions: {
-        anthropic: { deferLoading: true },
-      },
       execute: async (input: unknown) =>
         runTrainlogToolInline(def.name, userId, input),
     });

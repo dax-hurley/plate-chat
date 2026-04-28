@@ -35,6 +35,8 @@ export default defineConfig({
     }),
     react(),
     VitePWA({
+      // TanStack+Nitro emit the browser bundle here; default `dist` breaks workbox glob + leaves sw.js outside `capacitor.webDir`.
+      outDir: ".output/public",
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["icon.svg"],

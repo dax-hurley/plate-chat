@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { getDb, type TrainlogDB } from "./database";
-import { startSyncRunner, stopSyncRunner, triggerSync } from "./sync";
+import { startSyncRunner, stopSyncRunner } from "./sync";
 
 interface DbValue {
   db: TrainlogDB | null;
@@ -27,7 +27,6 @@ export function DbProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setDb(inst);
       startSyncRunner();
-      triggerSync();
     })();
     return () => {
       cancelled = true;
