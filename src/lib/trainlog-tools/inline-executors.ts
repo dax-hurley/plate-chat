@@ -139,40 +139,45 @@ export async function runTrainlogToolInline(
         isWarmup?: boolean;
         restBetweenSetsSec?: number;
       };
-      const row = await workouts.appendTemplateItem(userId, {
-        templateId: i.templateId.trim(),
-        exerciseId: i.exerciseId.trim(),
-        targetSets: i.targetSets,
-        targetReps: i.targetReps,
-        targetDurationSec: i.targetDurationSec,
-        targetDistance: i.targetDistance,
-        defaultWeight: i.defaultWeight,
-        weightUnit: i.weightUnit,
-        progressiveOverloadEnabled: i.progressiveOverloadEnabled,
-        progressiveOverloadIncrement: i.progressiveOverloadIncrement,
-        progressiveOverloadRequireFullCompletion:
-          i.progressiveOverloadRequireFullCompletion,
-        isWarmup: i.isWarmup,
-        restBetweenSetsSec: i.restBetweenSetsSec,
-      });
-      return {
-        itemId: row.id,
-        templateId: row.templateId,
-        exerciseId: row.exerciseId,
-        order: row.order,
-        targetSets: row.targetSets,
-        targetReps: row.targetReps,
-        targetDurationSec: row.targetDurationSec,
-        targetDistance: row.targetDistance,
-        defaultWeight: row.defaultWeight,
-        weightUnit: row.weightUnit,
-        progressiveOverloadEnabled: row.progressiveOverloadEnabled,
-        progressiveOverloadIncrement: row.progressiveOverloadIncrement,
-        progressiveOverloadRequireFullCompletion:
-          row.progressiveOverloadRequireFullCompletion,
-        isWarmup: row.isWarmup,
-        restBetweenSetsSec: row.restBetweenSetsSec,
-      };
+      try {
+        const row = await workouts.appendTemplateItem(userId, {
+          templateId: i.templateId.trim(),
+          exerciseId: i.exerciseId.trim(),
+          targetSets: i.targetSets,
+          targetReps: i.targetReps,
+          targetDurationSec: i.targetDurationSec,
+          targetDistance: i.targetDistance,
+          defaultWeight: i.defaultWeight,
+          weightUnit: i.weightUnit,
+          progressiveOverloadEnabled: i.progressiveOverloadEnabled,
+          progressiveOverloadIncrement: i.progressiveOverloadIncrement,
+          progressiveOverloadRequireFullCompletion:
+            i.progressiveOverloadRequireFullCompletion,
+          isWarmup: i.isWarmup,
+          restBetweenSetsSec: i.restBetweenSetsSec,
+        });
+        return {
+          itemId: row.id,
+          templateId: row.templateId,
+          exerciseId: row.exerciseId,
+          order: row.order,
+          targetSets: row.targetSets,
+          targetReps: row.targetReps,
+          targetDurationSec: row.targetDurationSec,
+          targetDistance: row.targetDistance,
+          defaultWeight: row.defaultWeight,
+          weightUnit: row.weightUnit,
+          progressiveOverloadEnabled: row.progressiveOverloadEnabled,
+          progressiveOverloadIncrement: row.progressiveOverloadIncrement,
+          progressiveOverloadRequireFullCompletion:
+            row.progressiveOverloadRequireFullCompletion,
+          isWarmup: row.isWarmup,
+          restBetweenSetsSec: row.restBetweenSetsSec,
+        };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Error";
+        return { error: message };
+      }
     }
 
     case "bulk_add_exercises_to_template": {
@@ -193,45 +198,50 @@ export async function runTrainlogToolInline(
           restBetweenSetsSec?: number;
         }>;
       };
-      const rows = await workouts.appendTemplateItemsBulk(
-        userId,
-        templateId.trim(),
-        exercises.map((i) => ({
-          exerciseId: i.exerciseId,
-          targetSets: i.targetSets,
-          targetReps: i.targetReps,
-          targetDurationSec: i.targetDurationSec,
-          targetDistance: i.targetDistance,
-          defaultWeight: i.defaultWeight,
-          weightUnit: i.weightUnit,
-          progressiveOverloadEnabled: i.progressiveOverloadEnabled,
-          progressiveOverloadIncrement: i.progressiveOverloadIncrement,
-          progressiveOverloadRequireFullCompletion:
-            i.progressiveOverloadRequireFullCompletion,
-          isWarmup: i.isWarmup,
-          restBetweenSetsSec: i.restBetweenSetsSec,
-        }))
-      );
-      return {
-        items: rows.map((row) => ({
-          itemId: row.id,
-          templateId: row.templateId,
-          exerciseId: row.exerciseId,
-          order: row.order,
-          targetSets: row.targetSets,
-          targetReps: row.targetReps,
-          targetDurationSec: row.targetDurationSec,
-          targetDistance: row.targetDistance,
-          defaultWeight: row.defaultWeight,
-          weightUnit: row.weightUnit,
-          progressiveOverloadEnabled: row.progressiveOverloadEnabled,
-          progressiveOverloadIncrement: row.progressiveOverloadIncrement,
-          progressiveOverloadRequireFullCompletion:
-            row.progressiveOverloadRequireFullCompletion,
-          isWarmup: row.isWarmup,
-          restBetweenSetsSec: row.restBetweenSetsSec,
-        })),
-      };
+      try {
+        const rows = await workouts.appendTemplateItemsBulk(
+          userId,
+          templateId.trim(),
+          exercises.map((i) => ({
+            exerciseId: i.exerciseId,
+            targetSets: i.targetSets,
+            targetReps: i.targetReps,
+            targetDurationSec: i.targetDurationSec,
+            targetDistance: i.targetDistance,
+            defaultWeight: i.defaultWeight,
+            weightUnit: i.weightUnit,
+            progressiveOverloadEnabled: i.progressiveOverloadEnabled,
+            progressiveOverloadIncrement: i.progressiveOverloadIncrement,
+            progressiveOverloadRequireFullCompletion:
+              i.progressiveOverloadRequireFullCompletion,
+            isWarmup: i.isWarmup,
+            restBetweenSetsSec: i.restBetweenSetsSec,
+          }))
+        );
+        return {
+          items: rows.map((row) => ({
+            itemId: row.id,
+            templateId: row.templateId,
+            exerciseId: row.exerciseId,
+            order: row.order,
+            targetSets: row.targetSets,
+            targetReps: row.targetReps,
+            targetDurationSec: row.targetDurationSec,
+            targetDistance: row.targetDistance,
+            defaultWeight: row.defaultWeight,
+            weightUnit: row.weightUnit,
+            progressiveOverloadEnabled: row.progressiveOverloadEnabled,
+            progressiveOverloadIncrement: row.progressiveOverloadIncrement,
+            progressiveOverloadRequireFullCompletion:
+              row.progressiveOverloadRequireFullCompletion,
+            isWarmup: row.isWarmup,
+            restBetweenSetsSec: row.restBetweenSetsSec,
+          })),
+        };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Error";
+        return { error: message };
+      }
     }
 
     case "list_workout_routines": {

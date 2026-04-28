@@ -11,6 +11,7 @@ import {
   buildOnboardingContextBlock,
 } from "@/prompts/onboarding-system-prompt";
 import { getCoachSystemDateLine } from "@/prompts/coach-system-prompt";
+import { repairSuggestQuickRepliesToolInputs } from "@/lib/coach-quick-reply-sanitize";
 import {
   onboardingMealRefinementCompleteTool,
   suggestQuickRepliesTool,
@@ -83,7 +84,9 @@ export async function getOnboardingModelInput(
   const tools = createOnboardingTools(userId, {
     mealPlanRefinement: options?.mealPlanRefinement,
   });
-  const sanitized = dropUnusableOnboardingToolParts(messages);
+  const sanitized = repairSuggestQuickRepliesToolInputs(
+    dropUnusableOnboardingToolParts(messages)
+  );
   const modelMessages = await convertToModelMessages(
     sanitized.map(({ id, ...rest }) => {
       void id;

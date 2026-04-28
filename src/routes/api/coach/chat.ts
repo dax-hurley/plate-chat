@@ -113,7 +113,8 @@ async function handlePost({ request }: { request: Request }): Promise<Response> 
         return undefined;
       },
       onError: (error) => {
-        console.error("[coach/chat] stream error:", error);
+        // Also invoked when formatting `tool-output-error` chunks (failed tool execute).
+        console.error("[coach/chat] toUIMessageStream onError:", error);
         return coachDebug
           ? (debugErrorBody(error) ?? "Unknown stream error.")
           : USER_SAFE_ERROR;

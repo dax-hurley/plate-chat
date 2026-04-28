@@ -1,9 +1,15 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { nitro } from "nitro/vite";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Same as `capacitor.config.ts` webDir — absolute so Workbox never falls back to multi-env `build.outDir` (`dist`). */
+const capacitorWebPublicDir = path.resolve(__dirname, ".output/public");
 
 /** Capacitor needs a prerendered `index.html`; TanStack's prerender uses Vite preview, which only works with a Node-handled Nitro preset (not `aws-lambda`). Android CI sets this for `npm run build` only; SST deploy keeps the default Lambda preset. */
 const capacitorWeb =
@@ -36,7 +42,7 @@ export default defineConfig({
     react(),
     VitePWA({
       // TanStack+Nitro emit the browser bundle here; default `dist` breaks workbox glob + leaves sw.js outside `capacitor.webDir`.
-      outDir: ".output/public",
+      outDir: capacitorWebPublicDir,
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["icon.svg"],
@@ -70,6 +76,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        globDirectory: capacitorWebPublicDir,
         // RxDB is the source of truth for app data — do not cache /api/sync.
         // Only precache the hashed app shell; everything network-bound must
         // either succeed or surface as an offline state in the UI.

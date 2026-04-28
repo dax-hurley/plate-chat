@@ -152,6 +152,8 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           # Nitro `node-server` for a bootable `.output/server` (SSR snapshot only — APK uses static files).
+          # Override org/repo env that might set SERVER_PRESET / NITRO_PRESET to `aws-lambda` (would emit `awslambda.*` in `.output/server` and break this script under plain Node).
+          NITRO_PRESET: node-server
           CAPACITOR_WEB_BUILD: "1"
           AUTH_SECRET: ci-placeholder-auth-secret-min-32-chars-long
           BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-32ch-minimum

@@ -6,6 +6,7 @@ import {
 } from "ai";
 
 import { formatProfileForCoachPrompt } from "@/lib/coach-profile-context";
+import { repairSuggestQuickRepliesToolInputs } from "@/lib/coach-quick-reply-sanitize";
 import {
   getCoachCachableSystemPrefix,
   getCoachSystemDateLine,
@@ -67,7 +68,9 @@ export function flattenCoachSystemForDebug(
  */
 export async function getCoachModelInput(userId: string, messages: UIMessage[]) {
   const tools = createCoachTools(userId);
-  const sanitized = dropUnusableCoachToolParts(messages);
+  const sanitized = repairSuggestQuickRepliesToolInputs(
+    dropUnusableCoachToolParts(messages)
+  );
   const modelMessages = await convertToModelMessages(
     sanitized.map(({ id, ...rest }) => {
       void id;

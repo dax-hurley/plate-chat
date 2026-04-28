@@ -2,54 +2,79 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { APP_BRAND_NAME } from "./brand";
+import { splitLeadingEmoji } from "./quick-reply-split";
 
-const quickReplySuggestionsSchema = z.object({
+export const quickReplySuggestionsSchema = z.object({
   suggestions: z
     .array(
-      z.object({
-        text: z
-          .string()
-          .describe(
-            "Plain tap-to-send line (max ~8 words, no emojis inside this string)."
-          ),
-        emoji: z
-          .string()
-          .optional()
-          .describe(
-            "One Unicode emoji for this chip (e.g. 💪 🍽️). Prefer setting on every row; vary when topics differ."
-          ),
-      })
+      z
+        .string()
+        .min(1)
+        .max(240)
+        .describe(
+          "One tap-to-send line (max ~8 words). Optionally start with one real UTF-8 emoji and a space (e.g. \"💪 Upper/Lower split\"). Put emoji inside this string only — never use \\\\u JSON escapes for emoji."
+        )
     )
     .min(1)
+    .max(8)
     .describe(
-      "1–8 short tap-to-send phrases (max ~8 words each, no numbering inside a string)."
+      "1–8 short follow-up chips. Prefer 2–4. No numbering inside a string."
     ),
 });
+
+/**
+ * Coerce persisted or legacy quick-reply tool `input` into `{ suggestions: string[] }`.
+ * Handles the old `{ suggestions: [{ text, emoji? }] }` shape and plain string arrays.
+ */
+export function coerceQuickReplyToolInput(
+  raw: unknown
+): { suggestions: string[] } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const arr = (raw as { suggestions?: unknown }).suggestions;
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const out: string[] = [];
+  for (const x of arr) {
+    if (typeof x === "string") {
+      const t = x.trim();
+      if (t) out.push(t);
+    } else if (
+      x &&
+      typeof x === "object" &&
+      typeof (x as { text?: unknown }).text === "string"
+    ) {
+      const text = String((x as { text: string }).text).trim();
+      if (!text) continue;
+      const em =
+        typeof (x as { emoji?: unknown }).emoji === "string"
+          ? String((x as { emoji: string }).emoji).trim().slice(0, 8)
+          : "";
+      out.push(em ? `${em} ${text}` : text);
+    }
+  }
+  if (out.length === 0) return null;
+  return { suggestions: out.slice(0, 8) };
+}
 
 /**
  * UI-only: tool arguments stream to the client. No server DB — safe to import from client code.
  * Reused by the full coach tool registry in `coach-tools.ts`.
  */
 export const suggestQuickRepliesTool = tool({
-  description: `Emit tap-ready follow-up prompts for this turn. Call exactly once per coach reply, after your user-visible answer (and after any ${APP_BRAND_NAME} data tools). Each element of \`suggestions\` is \`{ text, emoji? }\`: keep \`text\` emoji-free; set \`emoji\` on each row when possible (the UI prefixes each chip). Do not describe this tool in prose to the user.`,
+  description: `Emit tap-ready follow-up prompts for this turn. Call exactly once per coach reply, after your user-visible answer (and after any ${APP_BRAND_NAME} data tools). \`suggestions\` is a JSON array of strings only. Each string may start with one literal emoji and a space, then plain words (max ~8 words). Never put emoji in a separate object field and never use \\\\u escapes for emoji — that breaks JSON. Do not describe this tool in prose to the user.`,
   inputSchema: quickReplySuggestionsSchema,
   providerOptions: {
     anthropic: { cacheControl: { type: "ephemeral" } },
   },
   execute: async ({ suggestions }) => {
-    const cleaned = suggestions
-      .map((s) => ({
-        text: s.text.trim(),
-        em: typeof s.emoji === "string" ? s.emoji.trim().slice(0, 8) : "",
-      }))
-      .filter((s) => s.text.length > 0)
-      .slice(0, 8);
-    const seed = cleaned.find((s) => s.em.length > 0)?.em ?? "";
+    const cleaned = suggestions.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 8);
+    const seed =
+      cleaned.map((s) => splitLeadingEmoji(s).emoji).find((e) => e.length > 0) ??
+      "";
     return {
       ok: true as const,
       count: cleaned.length,
       emoji: seed.length > 0 ? seed : "💬",
-      suggestions: cleaned.map((s) => s.text),
+      suggestions: cleaned,
     };
   },
 });

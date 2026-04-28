@@ -4,6 +4,7 @@ import { ChevronRight, RefreshCw, WifiOff } from "lucide-react";
 import { AssistantMarkdown } from "@/components/assistant-markdown";
 import { Button } from "@/components/ui/button";
 import { getCoachToolUiCopy } from "@/lib/coach-tool-ui";
+import { splitLeadingEmoji } from "@/lib/quick-reply-split";
 import { cn } from "@/lib/utils";
 
 export const QUICK_REPLY_TOOL = "suggest_quick_replies";
@@ -82,7 +83,9 @@ function parseQuickReplyToolInput(input: unknown): { rows: QuickReplyRow[] } {
     for (const x of raw) {
       if (typeof x === "string") {
         const t = x.trim();
-        if (t) acc.push({ text: t, emoji: "" });
+        if (!t) continue;
+        const { emoji, text } = splitLeadingEmoji(t);
+        acc.push({ text: text || t, emoji });
       } else if (x && typeof x === "object" && typeof (x as { text?: unknown }).text === "string") {
         const text = String((x as { text: string }).text).trim();
         if (!text) continue;
