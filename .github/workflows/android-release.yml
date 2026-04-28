@@ -109,6 +109,20 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.checkout_ref }}
 
+      # workflow_dispatch always uses the workflow file from the default branch, but checkout is
+      # the requested tag. Tags created before scripts/ensure-capacitor-index-html.mjs existed
+      # would otherwise fail MODULE_NOT_FOUND while still running this updated workflow.
+      - name: Capacitor helper script (manual run vs older tag)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/ensure-capacitor-index-html.mjs ]; then
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            git fetch --no-tags origin "${DEFAULT_BRANCH}"
+            mkdir -p scripts
+            git show "origin/${DEFAULT_BRANCH}:scripts/ensure-capacitor-index-html.mjs" > scripts/ensure-capacitor-index-html.mjs
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
