@@ -1,5 +1,8 @@
 import Dexie, { type Table } from "dexie";
 
+/** Dexie / IndexedDB database name (offline cache on web and Capacitor WebView). */
+export const TRAINLOG_INDEXEDDB_NAME = "trainlog";
+
 /**
  * Client-side IndexedDB schema (via Dexie). Every synced row carries the
  * common fields `updatedAt`, `deletedAt`, `rev`, `userId` (except
@@ -48,7 +51,7 @@ export class TrainlogDB extends Dexie {
   _sync!: Table<SyncMeta, string>;
 
   constructor() {
-    super("trainlog");
+    super(TRAINLOG_INDEXEDDB_NAME);
     this.version(1).stores({
       exercises: "id, userId, name, _dirty",
       workoutRoutineGroups: "id, userId, sortOrder, _dirty",

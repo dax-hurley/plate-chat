@@ -77,7 +77,7 @@ export default defineConfig({
       },
       workbox: {
         globDirectory: capacitorWebPublicDir,
-        // RxDB is the source of truth for app data — do not cache /api/sync.
+        // Local Dexie DB is the source of truth — do not cache /api/sync.
         // Only precache the hashed app shell; everything network-bound must
         // either succeed or surface as an offline state in the UI.
         navigateFallback: "/index.html",

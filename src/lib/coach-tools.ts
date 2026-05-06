@@ -16,7 +16,7 @@ export {
 
 /**
  * App data tools for the AI coach: shared registry (`src/lib/trainlog-tools/`) plus
- * UI-only helpers that are not part of the MCP server.
+ * UI-only helpers that are not part of the shared trainlog data tools.
  *
  * **Do not import this module from client components** — it pulls in server DB code via
  * `createSharedTrainlogTools`. For UI-only tool definitions, import from `@/lib/coach-ui-only-tools`.

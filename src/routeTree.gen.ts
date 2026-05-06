@@ -31,6 +31,7 @@ import { Route as AppWorkoutsIdRouteImport } from './routes/app/workouts/$id'
 import { Route as AppNutritionPlanRouteImport } from './routes/app/nutrition/plan'
 import { Route as AppNutritionLibraryRouteImport } from './routes/app/nutrition/library'
 import { Route as ApiUserProfileRouteImport } from './routes/api/user/profile'
+import { Route as ApiSyncStatusRouteImport } from './routes/api/sync/status'
 import { Route as ApiSyncCollectionRouteImport } from './routes/api/sync/$collection'
 import { Route as ApiOnboardingChatRouteImport } from './routes/api/onboarding/chat'
 import { Route as ApiNutritionImportRecipeUrlRouteImport } from './routes/api/nutrition/import-recipe-url'
@@ -155,6 +156,11 @@ const ApiUserProfileRoute = ApiUserProfileRouteImport.update({
   path: '/api/user/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSyncStatusRoute = ApiSyncStatusRouteImport.update({
+  id: '/api/sync/status',
+  path: '/api/sync/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncCollectionRoute = ApiSyncCollectionRouteImport.update({
   id: '/api/sync/$collection',
   path: '/api/sync/$collection',
@@ -249,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
   '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
+  '/api/sync/status': typeof ApiSyncStatusRoute
   '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
   '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
+  '/api/sync/status': typeof ApiSyncStatusRoute
   '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
@@ -320,6 +328,7 @@ export interface FileRoutesById {
   '/api/nutrition/import-recipe-url': typeof ApiNutritionImportRecipeUrlRoute
   '/api/onboarding/chat': typeof ApiOnboardingChatRoute
   '/api/sync/$collection': typeof ApiSyncCollectionRoute
+  '/api/sync/status': typeof ApiSyncStatusRoute
   '/api/user/profile': typeof ApiUserProfileRoute
   '/app/nutrition/library': typeof AppNutritionLibraryRoute
   '/app/nutrition/plan': typeof AppNutritionPlanRoute
@@ -359,6 +368,7 @@ export interface FileRouteTypes {
     | '/api/nutrition/import-recipe-url'
     | '/api/onboarding/chat'
     | '/api/sync/$collection'
+    | '/api/sync/status'
     | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
@@ -392,6 +402,7 @@ export interface FileRouteTypes {
     | '/api/nutrition/import-recipe-url'
     | '/api/onboarding/chat'
     | '/api/sync/$collection'
+    | '/api/sync/status'
     | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
@@ -429,6 +440,7 @@ export interface FileRouteTypes {
     | '/api/nutrition/import-recipe-url'
     | '/api/onboarding/chat'
     | '/api/sync/$collection'
+    | '/api/sync/status'
     | '/api/user/profile'
     | '/app/nutrition/library'
     | '/app/nutrition/plan'
@@ -459,6 +471,7 @@ export interface RootRouteChildren {
   ApiNutritionImportRecipeUrlRoute: typeof ApiNutritionImportRecipeUrlRoute
   ApiOnboardingChatRoute: typeof ApiOnboardingChatRoute
   ApiSyncCollectionRoute: typeof ApiSyncCollectionRoute
+  ApiSyncStatusRoute: typeof ApiSyncStatusRoute
   ApiUserProfileRoute: typeof ApiUserProfileRoute
   ApiNutritionMealPlanShoppingListRoute: typeof ApiNutritionMealPlanShoppingListRoute
 }
@@ -617,6 +630,13 @@ declare module '@tanstack/react-router' {
       path: '/api/user/profile'
       fullPath: '/api/user/profile'
       preLoaderRoute: typeof ApiUserProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sync/status': {
+      id: '/api/sync/status'
+      path: '/api/sync/status'
+      fullPath: '/api/sync/status'
+      preLoaderRoute: typeof ApiSyncStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync/$collection': {
@@ -814,6 +834,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNutritionImportRecipeUrlRoute: ApiNutritionImportRecipeUrlRoute,
   ApiOnboardingChatRoute: ApiOnboardingChatRoute,
   ApiSyncCollectionRoute: ApiSyncCollectionRoute,
+  ApiSyncStatusRoute: ApiSyncStatusRoute,
   ApiUserProfileRoute: ApiUserProfileRoute,
   ApiNutritionMealPlanShoppingListRoute: ApiNutritionMealPlanShoppingListRoute,
 }

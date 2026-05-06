@@ -1,4 +1,4 @@
-/** Stored on `user_profiles.goalPreset` and in API/MCP/coach tools. */
+/** Stored on `user_profiles.goalPreset` and in API/coach tools. */
 export const GOAL_PRESET_VALUES = [
   "lose_weight",
   "gain_muscle",

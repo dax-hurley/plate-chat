@@ -114,7 +114,7 @@ export async function updateUserProfile(
     activityLevel?: ActivityLevel | string | null;
     ageYears?: number | null;
     onboardingCompletedAt?: Date | null;
-    /** API/MCP may send string; normalized with `parseGoalPreset`. */
+    /** API may send string; normalized with `parseGoalPreset`. */
     goalPreset?: GoalPreset | string | null;
     fitnessGoals?: string | null;
     preferences?: string | null;

@@ -12,8 +12,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { authFetch } from "@/lib/client/auth-fetch";
-import { triggerSync } from "@/lib/client/db/sync";
+import {
+  pullSyncCollections,
+  scheduleDebouncedPush,
+} from "@/lib/client/db/sync";
 import { useOnline } from "@/lib/client/use-online";
+import { collectionNames } from "@/shared/schemas/collections";
 import {
   CoachContextInspector,
   CoachContextInspectorTrigger,
@@ -304,7 +308,13 @@ export function CoachChat({
           await persistMessages(next, aiTitle);
         } finally {
           /** Coach tools mutate server-backed collections; pull immediately so open pages (Dexie live queries) update without waiting for the poll interval. */
-          triggerSync();
+          void (async () => {
+            try {
+              await pullSyncCollections(collectionNames);
+            } finally {
+              scheduleDebouncedPush();
+            }
+          })();
         }
       })();
     },
@@ -343,7 +353,13 @@ export function CoachChat({
           if (!Array.isArray(next)) return;
           setMessages(next);
           onPersistRef.current?.();
-          triggerSync();
+          void (async () => {
+            try {
+              await pullSyncCollections(collectionNames);
+            } finally {
+              scheduleDebouncedPush();
+            }
+          })();
         } catch {
           /* ignore */
         }

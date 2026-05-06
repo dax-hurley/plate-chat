@@ -22,16 +22,18 @@ type TemplateRow = {
 export function WorkoutTemplateLibraryCard({ template: t }: { template: TemplateRow }) {
   const exerciseCount = t.itemCount ?? 0;
   return (
-    <li>
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
+    <li className="min-w-0">
+      <Card className="min-w-0">
+        <CardHeader className="min-w-0 pb-2">
+          <div className="flex min-w-0 items-start justify-between gap-2">
             <Link
               to="/app/workouts/$id"
               params={{ id: t.id }}
               className="min-h-11 min-w-0 flex-1 touch-manipulation py-0.5"
             >
-              <CardTitle className="text-lg hover:underline">{t.name}</CardTitle>
+              <CardTitle className="min-w-0 break-words text-lg hover:underline">
+                {t.name}
+              </CardTitle>
               <CardDescription>
                 {exerciseCount} exercise
                 {exerciseCount === 1 ? "" : "s"}

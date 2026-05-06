@@ -1,12 +1,11 @@
 /**
  * Write helpers that decorate rows with the sync metadata (`updatedAt`,
- * `rev`, `deletedAt`, `_dirty`) and kick the sync runner so pushes don't wait
- * for the heartbeat. Stores call these rather than hand-rolling the metadata
- * on every mutation.
+ * `rev`, `deletedAt`, `_dirty`) and enqueue a debounced push via the sync layer.
+ * Stores call these rather than hand-rolling the metadata on every mutation.
  */
 import type { Table } from "dexie";
 import type { SyncedRow } from "./database";
-import { triggerSync } from "./sync";
+import { onLocalWrite } from "./sync";
 
 function now(): number {
   return Date.now();
@@ -24,7 +23,7 @@ export async function insertLocal<T extends Record<string, unknown>>(
     rev: 1,
     _dirty: 1,
   } as unknown as SyncedRow);
-  triggerSync();
+  onLocalWrite(table);
 }
 
 export async function updateLocal(
@@ -42,7 +41,7 @@ export async function updateLocal(
     rev: (existing.rev ?? 0) + 1,
     _dirty: 1,
   } as SyncedRow);
-  triggerSync();
+  onLocalWrite(table);
 }
 
 export async function softDeleteLocal(
@@ -59,5 +58,5 @@ export async function softDeleteLocal(
     rev: (existing.rev ?? 0) + 1,
     _dirty: 1,
   } as SyncedRow);
-  triggerSync();
+  onLocalWrite(table);
 }

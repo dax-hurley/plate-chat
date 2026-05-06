@@ -20,7 +20,6 @@ import { useDb } from "@/lib/client/db/provider";
 import {
   pullSyncCollectionFromScratch,
   pullSyncCollections,
-  triggerSync,
 } from "@/lib/client/db/sync";
 import {
   useExercises,
@@ -189,7 +188,6 @@ function SessionPage() {
   const runCatalogPull = useCallback(async () => {
     await pullSyncCollectionFromScratch("exercises");
     await pullSyncCollections(["workoutTemplateItems"]);
-    triggerSync();
   }, []);
 
   useEffect(() => {

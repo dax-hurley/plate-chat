@@ -18,5 +18,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.mts"],
-  "exclude": ["node_modules", "mcp-server"]
+  "exclude": ["node_modules"]
 }

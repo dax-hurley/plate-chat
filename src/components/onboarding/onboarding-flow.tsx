@@ -53,7 +53,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authFetch } from "@/lib/client/auth-fetch";
 import { useDb } from "@/lib/client/db/provider";
-import { triggerSync } from "@/lib/client/db/sync";
+import { POST_ONBOARDING_PULL_SCOPE } from "@/lib/client/db/sync-scopes";
+import {
+  flushPendingPushNow,
+  pullSyncCollections,
+  scheduleScopedPull,
+  triggerSync,
+} from "@/lib/client/db/sync";
 import { useOnline } from "@/lib/client/use-online";
 import { formatDayKey, mondayOfWeekContaining } from "@/lib/date-key";
 import {
@@ -258,6 +264,7 @@ function useOnboardingChat(
     transport,
     onFinish: () => {
       void triggerSync();
+      scheduleScopedPull();
     },
   });
 }
@@ -1294,6 +1301,7 @@ export function OnboardingFlow({ userId }: { userId: string }) {
         return;
       }
       void triggerSync();
+      scheduleScopedPull();
       toast.success("Profile saved");
       setPhase("goals");
     } catch (e) {
@@ -1500,6 +1508,13 @@ export function OnboardingFlow({ userId }: { userId: string }) {
         sessionStorage.setItem(onboardingCacheKey(userId), "1");
       }
       void triggerSync();
+      try {
+        await flushPendingPushNow();
+        await pullSyncCollections([...POST_ONBOARDING_PULL_SCOPE]);
+      } catch (e) {
+        console.error(e);
+        scheduleScopedPull();
+      }
       await navigate({ to: "/app" });
     } catch (e) {
       console.error(e);
@@ -1527,6 +1542,13 @@ export function OnboardingFlow({ userId }: { userId: string }) {
         sessionStorage.setItem(onboardingCacheKey(userId), "1");
       }
       void triggerSync();
+      try {
+        await flushPendingPushNow();
+        await pullSyncCollections([...POST_ONBOARDING_PULL_SCOPE]);
+      } catch (e) {
+        console.error(e);
+        scheduleScopedPull();
+      }
       await navigate({ to: "/app" });
     } catch (e) {
       console.error(e);

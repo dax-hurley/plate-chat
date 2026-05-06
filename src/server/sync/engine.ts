@@ -117,19 +117,17 @@ function deserializeRow(
   return out;
 }
 
-export async function handlePull(
+/**
+ * Same predicate as incremental pull: rows visible to the user strictly after
+ * the given checkpoint (or all visible rows when `cursor` is null).
+ */
+function buildPullWhere(
   name: CollectionName,
   userId: string,
-  cursor: PullCheckpoint | null,
-  limit: number
-): Promise<{
-  documents: Array<Record<string, unknown>>;
-  checkpoint: PullCheckpoint;
-}> {
+  cursor: PullCheckpoint | null
+) {
   const table = tableFor(name);
   const pk = pkColumn(name);
-  const n = Math.min(Math.max(limit || DEFAULT_LIMIT, 1), MAX_LIMIT);
-
   const userIdCol = (table as any).userId;
   const updatedAtCol = col(table, "updatedAt");
   const idCol = col(table, pk);
@@ -152,6 +150,64 @@ export async function handlePull(
         return afterCursor ? and(ownership, afterCursor) : ownership;
       })()
     : afterCursor;
+
+  return { table, where, updatedAtCol, idCol };
+}
+
+/** True if at least one server row exists after the checkpoint (cheap EXISTS). */
+export async function collectionHasPullableRowsAfter(
+  name: CollectionName,
+  userId: string,
+  cursor: PullCheckpoint | null
+): Promise<boolean> {
+  const { table, where, updatedAtCol, idCol } = buildPullWhere(
+    name,
+    userId,
+    cursor
+  );
+  const rows = await db
+    .select()
+    .from(table)
+    .where(where as any)
+    .orderBy(asc(updatedAtCol), asc(idCol))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** For `POST /api/sync/status`: which of the requested collections have newer remote rows. */
+export async function handleSyncStatus(
+  userId: string,
+  checkpoints: Partial<Record<string, PullCheckpoint | null>>
+): Promise<{ changed: CollectionName[] }> {
+  const changed: CollectionName[] = [];
+  for (const [raw, cp] of Object.entries(checkpoints)) {
+    const name = sanitizeCollection(raw);
+    if (!name) continue;
+    const cursor = cp === undefined ? null : cp;
+    if (await collectionHasPullableRowsAfter(name, userId, cursor)) {
+      changed.push(name);
+    }
+  }
+  return { changed };
+}
+
+export async function handlePull(
+  name: CollectionName,
+  userId: string,
+  cursor: PullCheckpoint | null,
+  limit: number
+): Promise<{
+  documents: Array<Record<string, unknown>>;
+  checkpoint: PullCheckpoint;
+}> {
+  const pk = pkColumn(name);
+  const n = Math.min(Math.max(limit || DEFAULT_LIMIT, 1), MAX_LIMIT);
+
+  const { table, where, updatedAtCol, idCol } = buildPullWhere(
+    name,
+    userId,
+    cursor
+  );
 
   const rows = await db
     .select()

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** No tool arguments (MCP omits inputSchema for these). */
+/** No tool arguments. */
 export const emptyInput = z.object({});
 
 export const vitalKeySchema = z.enum([

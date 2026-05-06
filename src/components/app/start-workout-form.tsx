@@ -76,11 +76,11 @@ export function StartWorkoutForm({
           type="submit"
           disabled={pending || activeSessionLoading}
           className={cn(
-            "min-h-12 w-full justify-between gap-3 text-base shadow-sm",
+            "min-h-12 w-full min-w-0 shrink justify-between gap-3 text-base shadow-sm",
             buttonClassName
           )}
         >
-          <span className="truncate font-medium">{name}</span>
+          <span className="min-w-0 truncate font-medium">{name}</span>
           <span className="text-primary-foreground/90 inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold">
             <Play className="size-4 fill-current opacity-90" aria-hidden />
             Start

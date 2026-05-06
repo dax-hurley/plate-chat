@@ -8,6 +8,12 @@ import { useEffect } from "react";
 import { authFetch } from "@/lib/client/auth-fetch";
 import { onboardingCacheKey } from "@/lib/client/onboarding-guard";
 import { loadTokens } from "@/lib/client/token-storage";
+import { useSyncScope } from "@/lib/client/db/sync-scope";
+import {
+  MEAL_PLAN_SYNC_SCOPE,
+  NUTRITION_SECTION_SYNC_SCOPE,
+  WORKOUT_SECTION_SYNC_SCOPE,
+} from "@/lib/client/db/sync-scopes";
 import { useLocalSession } from "@/lib/stores/session";
 import { AppShell } from "@/components/app/app-shell";
 
@@ -37,6 +43,11 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppLayout() {
+  useSyncScope([
+    ...WORKOUT_SECTION_SYNC_SCOPE,
+    ...NUTRITION_SECTION_SYNC_SCOPE,
+    ...MEAL_PLAN_SYNC_SCOPE,
+  ]);
   const navigate = useNavigate();
   const { userId, loading } = useLocalSession();
   useEffect(() => {

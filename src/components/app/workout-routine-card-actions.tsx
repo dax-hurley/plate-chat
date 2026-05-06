@@ -55,7 +55,7 @@ export function WorkoutRoutineCardActions({
           Quick add exercise
         </Link>
       </div>
-      <div className="flex min-h-12 gap-2 md:hidden">
+      <div className="flex min-h-12 min-w-0 gap-2 md:hidden">
         <StartWorkoutForm
           templateId={templateId}
           name={name}

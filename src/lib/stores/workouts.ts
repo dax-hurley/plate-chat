@@ -3,7 +3,10 @@ import { useLocalSession } from "./session";
 import type { SyncedRow } from "@/lib/client/db/database";
 import { useDb } from "@/lib/client/db/provider";
 import { useLiveArray, useLiveOne } from "@/lib/client/db/hooks";
-import { triggerSync } from "@/lib/client/db/sync";
+import {
+  markCollectionPendingPush,
+  scheduleDebouncedPush,
+} from "@/lib/client/db/sync";
 import {
   insertLocal,
   softDeleteLocal,
@@ -464,7 +467,8 @@ export function useWorkoutMutations() {
           _dirty: 1,
         } as SyncedRow);
       });
-      triggerSync();
+      markCollectionPendingPush("workoutSessions");
+      scheduleDebouncedPush();
       return sessionId;
     },
     [db, ready, userId]

@@ -79,7 +79,7 @@ function WorkoutsPage() {
   const totalTemplates = templates.length;
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-8 sm:max-w-5xl">
+    <div className="mx-auto w-full min-w-0 max-w-xl space-y-8 sm:max-w-5xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
@@ -138,14 +138,14 @@ function WorkoutsPage() {
                 No workouts in this routine yet.
               </p>
             ) : (
-              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {groupTemplates.map((t, idx) => {
                   const prev = groupTemplates[idx - 1] ?? null;
                   const next = groupTemplates[idx + 1] ?? null;
                   return (
                     <div
                       key={t.id}
-                      className="flex flex-col gap-2 sm:items-stretch"
+                      className="flex min-w-0 flex-col gap-2 sm:items-stretch"
                     >
                       <WorkoutTemplateLibraryCard
                         template={{
@@ -181,7 +181,7 @@ function WorkoutsPage() {
           <h2 className="text-lg font-semibold tracking-tight">
             {groups.length > 0 ? "Not in a routine" : "Your workouts"}
           </h2>
-          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {ungrouped.map((t) => (
               <WorkoutTemplateLibraryCard
                 key={t.id}

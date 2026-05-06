@@ -7,7 +7,6 @@ const eslintConfig = defineConfig([
     ".output/**",
     ".sst/**",
     "src/routeTree.gen.ts",
-    "mcp-server/dist/**",
     "android/**",
   ]),
 ]);
