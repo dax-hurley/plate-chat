@@ -11,9 +11,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Same as `capacitor.config.ts` webDir — absolute so Workbox never falls back to multi-env `build.outDir` (`dist`). */
 const capacitorWebPublicDir = path.resolve(__dirname, ".output/public");
 
-/** Capacitor needs a prerendered `index.html`; TanStack's prerender uses Vite preview, which only works with a Node-handled Nitro preset (not `aws-lambda`). Android CI sets this for `npm run build` only; SST deploy keeps the default Lambda preset. */
+/**
+ * Capacitor needs a prerendered `index.html`; TanStack's prerender uses Vite preview, which only works with a Node-handled Nitro preset (not `aws-lambda`).
+ *
+ * Primary switch is `CAPACITOR_WEB_BUILD=1`, but we also honor `NITRO_PRESET=node-server` to avoid subtle CI/env precedence issues
+ * (some platforms set `NITRO_PRESET`/`SERVER_PRESET` globally).
+ */
 const capacitorWeb =
-  process.env.CAPACITOR_WEB_BUILD === "1" || process.env.CAPACITOR_WEB_BUILD === "true";
+  process.env.CAPACITOR_WEB_BUILD === "1" ||
+  process.env.CAPACITOR_WEB_BUILD === "true" ||
+  process.env.NITRO_PRESET === "node-server" ||
+  process.env.SERVER_PRESET === "node-server";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
