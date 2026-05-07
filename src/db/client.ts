@@ -1,10 +1,13 @@
 import type { Client } from "@libsql/core/api";
+import { createClient as createHttpClient } from "@libsql/client/http";
+import { createClient as createWsClient } from "@libsql/client/ws";
 import { createRequire } from "node:module";
 import { drizzle } from "drizzle-orm/libsql/http";
 
 import * as schema from "./schema";
 
-const requireLibsql = createRequire(import.meta.url);
+/** Native `file:` / `:memory:` only — kept as `require` so Rollup does not pull `libsql` native into Lambda. */
+const requireLibsqlNode = createRequire(import.meta.url);
 
 const url = process.env.DATABASE_URL ?? "file:./data/local.db";
 const authToken = process.env.DATABASE_AUTH_TOKEN;
@@ -15,9 +18,9 @@ const capacitorWebBuild =
 
 /**
  * The default `@libsql/client` entry statically imports the native `libsql` driver
- * (optional `@libsql/linux-x64-*`), which Rollup inlines for Lambda and then fails
- * at runtime. For remote DBs, load the HTTP and WebSocket Hrana clients only.
- * The native `libsql` import is only used for local `file:` / SQLite (dev).
+ * (optional `@libsql/linux-x64-*`), which Lambda bundles cannot load. Production
+ * uses static imports from `@libsql/client/http` and `@libsql/client/ws` so they are
+ * bundled; local `file:` / `:memory:` still uses runtime `require("@libsql/client")`.
  *
  * Initialization is synchronous so `tsx` (CJS esbuild transform) and any consumer
  * that needs `db` at module load time (e.g. better-auth) work without top-level await.
@@ -34,31 +37,24 @@ function createLibsqlClient(): Client {
     (process.env.TSS_PRERENDERING === "true" || capacitorWebBuild) &&
     (url.startsWith("file:") || url === ":memory:")
   ) {
-    const { createClient } =
-      requireLibsql("@libsql/client/http") as typeof import("@libsql/client/http");
-    return createClient({
+    return createHttpClient({
       url: "libsql://prerender-placeholder.local",
       authToken: "prerender",
     });
   }
   if (url.startsWith("file:") || url === ":memory:") {
     const { createClient } =
-      requireLibsql("@libsql/client") as typeof import("@libsql/client");
+      requireLibsqlNode("@libsql/client") as typeof import("@libsql/client");
     return createClient({ url, authToken });
   }
   if (/^wss?:/i.test(url)) {
-    const { createClient } =
-      requireLibsql("@libsql/client/ws") as typeof import("@libsql/client/ws");
-    return createClient({ url, authToken });
+    return createWsClient({ url, authToken });
   }
-  const { createClient } =
-    requireLibsql("@libsql/client/http") as typeof import("@libsql/client/http");
-  return createClient({ url, authToken });
+  return createHttpClient({ url, authToken });
 }
 
 export const libsqlClient = createLibsqlClient();
-// `drizzle-orm/libsql` imports full `@libsql/client` (native). The `/http` entry only
-// pulls the Hrana HTTP client; our `libsqlClient` is still the full client for `file:`.
+// Align drizzle with bundled Hrana clients; `libsqlClient` remains the native client for `file:`.
 export const db = drizzle(libsqlClient, { schema });
 
 export type Database = typeof db;
