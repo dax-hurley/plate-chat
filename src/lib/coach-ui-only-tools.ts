@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withCoachToolDebugLog } from "@/lib/coach-ai-debug";
+
 import { APP_BRAND_NAME } from "./brand";
 import { splitLeadingEmoji } from "./quick-reply-split";
 
@@ -62,21 +64,23 @@ export function coerceQuickReplyToolInput(
 export const suggestQuickRepliesTool = tool({
   description: `Emit tap-ready follow-up prompts for this turn. Call exactly once per coach reply, after your user-visible answer (and after any ${APP_BRAND_NAME} data tools). \`suggestions\` is a JSON array of strings only. Each string may start with one literal emoji and a space, then plain words (max ~8 words). Never put emoji in a separate object field and never use \\\\u escapes for emoji — that breaks JSON. Do not describe this tool in prose to the user.`,
   inputSchema: quickReplySuggestionsSchema,
-  providerOptions: {
-    anthropic: { cacheControl: { type: "ephemeral" } },
-  },
-  execute: async ({ suggestions }) => {
-    const cleaned = suggestions.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 8);
-    const seed =
-      cleaned.map((s) => splitLeadingEmoji(s).emoji).find((e) => e.length > 0) ??
-      "";
-    return {
-      ok: true as const,
-      count: cleaned.length,
-      emoji: seed.length > 0 ? seed : "💬",
-      suggestions: cleaned,
-    };
-  },
+  execute: async (input) =>
+    withCoachToolDebugLog("suggest_quick_replies", input, async () => {
+      const { suggestions } = input;
+      const cleaned = suggestions
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .slice(0, 8);
+      const seed =
+        cleaned.map((s) => splitLeadingEmoji(s).emoji).find((e) => e.length > 0) ??
+        "";
+      return {
+        ok: true as const,
+        count: cleaned.length,
+        emoji: seed.length > 0 ? seed : "💬",
+        suggestions: cleaned,
+      };
+    }),
 });
 
 export const ONBOARDING_MEAL_REFINEMENT_COMPLETE_TOOL =
@@ -90,6 +94,11 @@ export const onboardingMealRefinementCompleteTool = tool({
   description:
     "Call **once** when the user is finished adjusting this week’s meal plan and ready to move on in setup. Use when they express satisfaction, say they are done, want to continue, or equivalent—**after** your brief acknowledgment, and only after any meal-plan data tools. Do **not** call while they still want changes or you still owe edits. Do not mention this tool to the user.",
   inputSchema: z.object({}),
-  execute: async () =>
-    ({ ok: true as const, proceed: true as const } as const),
+  execute: async (input) =>
+    withCoachToolDebugLog(
+      ONBOARDING_MEAL_REFINEMENT_COMPLETE_TOOL,
+      input,
+      async () =>
+        ({ ok: true as const, proceed: true as const } as const)
+    ),
 });

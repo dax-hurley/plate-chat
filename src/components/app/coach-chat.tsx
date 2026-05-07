@@ -1,3 +1,6 @@
+/**
+ * Coach chat UI (streams to `/api/coach/chat`, composite `coach_*` tools on the server).
+ */
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from "ai";
 import {
@@ -6,10 +9,11 @@ import {
   Loader2,
   MessageSquarePlus,
   Pencil,
+  RefreshCw,
   Sparkles,
   WifiOff,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 
 import { authFetch } from "@/lib/client/auth-fetch";
 import {
@@ -184,6 +188,98 @@ function shouldGenerateConversationTitle(messages: UIMessage[]) {
   return n === 1 || (n > 0 && n % 5 === 0);
 }
 
+type CoachMessageRowProps = {
+  message: UIMessage;
+  editingUserId: string | null;
+  busy: boolean;
+  online: boolean;
+  dismissedQuickReplies: boolean;
+  /** Incremental markdown (committed prefix only) while the assistant reply is streaming. */
+  streamThrottledMarkdown: boolean;
+  /** Provider token row on each assistant bubble (COACH_AI_DEBUG). */
+  showAssistantTokenUsage: boolean;
+  onBeginEditUser: (m: UIMessage) => void;
+  onQuickReply: (text: string) => void;
+  onRegenerateAssistant: (messageId: string) => void;
+};
+
+const CoachMessageRow = memo(function CoachMessageRow({
+  message: m,
+  editingUserId,
+  busy,
+  online,
+  dismissedQuickReplies,
+  streamThrottledMarkdown,
+  onBeginEditUser,
+  onQuickReply,
+  onRegenerateAssistant,
+  showAssistantTokenUsage,
+}: CoachMessageRowProps) {
+  return (
+    <div
+      className={cn(
+        "flex",
+        m.role === "user" ? "justify-end" : "justify-start"
+      )}
+    >
+      {m.role === "user" ? (
+        <div className="flex max-w-[90%] flex-col items-end gap-1.5">
+          <p
+            className={cn(
+              "bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 font-medium whitespace-pre-wrap",
+              editingUserId === m.id &&
+                "ring-primary/60 ring-2 ring-offset-2 ring-offset-background"
+            )}
+          >
+            {textFromParts(m)}
+          </p>
+          {editingUserId === m.id ? (
+            <p className="text-muted-foreground max-w-full text-right text-[0.65rem] leading-snug">
+              Editing in the message box below. Saving removes everything after
+              this message.
+            </p>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground h-8 touch-manipulation gap-1 px-2 text-xs"
+              disabled={busy}
+              title="Edit message; removes replies after it"
+              onClick={() => onBeginEditUser(m)}
+            >
+              <Pencil className="size-3.5" aria-hidden />
+              Edit
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "max-w-[95%] space-y-2 rounded-2xl border px-4 py-3",
+            isOfflineCoachNotice(m)
+              ? "border-amber-500/45 bg-amber-500/10"
+              : "bg-muted/40 border-border/60"
+          )}
+        >
+          <AssistantMessageParts
+            message={m}
+            dismissedQuickReplies={dismissedQuickReplies}
+            onQuickReply={onQuickReply}
+            onRegenerate={() => onRegenerateAssistant(m.id)}
+            busy={busy}
+            online={online}
+            showRegenerateAndTokenRow
+            showOfflineStyling
+            streamThrottledMarkdown={streamThrottledMarkdown}
+            showAssistantTokenUsage={showAssistantTokenUsage}
+          />
+        </div>
+      )}
+    </div>
+  );
+});
+
 export type CoachChatProps = {
   conversationId: string;
   initialMessages: UIMessage[];
@@ -228,6 +324,7 @@ export function CoachChat({
   const onPersistRef = useRef(onPersist);
   onPersistRef.current = onPersist;
   const online = useOnline();
+  const coachAiDebugUi = isCoachAiDebugUiEnabled();
 
   useEffect(() => {
     setDismissedQuickByAssistantId({});
@@ -461,8 +558,7 @@ export function CoachChat({
     () => lastCoachAiUsageFromMessages(messages),
     [messages]
   );
-  const showComposerDebug =
-    isCoachAiDebugUiEnabled() || lastUsageForComposer != null;
+  const showComposerDebug = coachAiDebugUi;
   const draftApproxTokens = approxTokensFromText(draftForComposerDebug);
   const draftPreview =
     draftForComposerDebug.trim().length > 0
@@ -471,6 +567,12 @@ export function CoachChat({
 
   useEffect(() => {
     if (!contextInspectorOpen) {
+      setContextPreview(null);
+      setContextPreviewError(null);
+      setContextPreviewLoading(false);
+      return;
+    }
+    if (!coachAiDebugUi) {
       setContextPreview(null);
       setContextPreviewError(null);
       setContextPreviewLoading(false);
@@ -521,6 +623,7 @@ export function CoachChat({
     };
   }, [
     contextInspectorOpen,
+    coachAiDebugUi,
     conversationId,
     messages,
     input,
@@ -542,6 +645,23 @@ export function CoachChat({
       await sendMessage();
     }
   }, [clearError, online, regenerate, sendMessage]);
+
+  /** Loaded thread (or dropped connection) with no assistant reply after the latest user turn. */
+  const retryPendingAssistantReply = useCallback(async () => {
+    if (!online || busy) return;
+    const last = messagesRef.current[messagesRef.current.length - 1];
+    if (!last || last.role !== "user") return;
+    clearError();
+    await sendMessage();
+  }, [busy, clearError, online, sendMessage]);
+
+  const showRetryPendingUserReply = useMemo(() => {
+    if (messages.length === 0 || busy || editingUserId != null || error) {
+      return false;
+    }
+    const last = messages[messages.length - 1];
+    return last.role === "user";
+  }, [messages, busy, editingUserId, error]);
 
   const appendOfflineCoachExchange = useCallback(
     (userText: string) => {
@@ -606,14 +726,54 @@ export function CoachChat({
     sendMessage,
   ]);
 
-  function beginEditUserMessage(m: UIMessage) {
-    if (busy || m.role !== "user") return;
-    setInputBeforeEdit(input);
-    setEditingUserId(m.id);
-    setEditDraft(textFromParts(m));
-    setInput("");
-    queueMicrotask(() => composerRef.current?.focus());
-  }
+  const lastAssistantId = useMemo(
+    () => lastAssistantMessageId(messages),
+    [messages]
+  );
+
+  const regenerateAssistantById = useCallback(
+    (messageId: string) => {
+      void regenerate({ messageId });
+    },
+    [regenerate]
+  );
+
+  const inputSnapshotRef = useRef(input);
+  inputSnapshotRef.current = input;
+
+  const beginEditUserMessage = useCallback(
+    (m: UIMessage) => {
+      if (busy || m.role !== "user") return;
+      setInputBeforeEdit(inputSnapshotRef.current);
+      setEditingUserId(m.id);
+      setEditDraft(textFromParts(m));
+      setInput("");
+      queueMicrotask(() => composerRef.current?.focus());
+    },
+    [busy]
+  );
+
+  const sendQuick = useCallback(
+    (text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      const msgs = messagesRef.current;
+      if (msgs.length === 0) {
+        setEmptyQuickDismissed(true);
+      } else {
+        const aid = lastAssistantMessageId(msgs);
+        if (aid) {
+          setDismissedQuickByAssistantId((d) => ({ ...d, [aid]: true }));
+        }
+      }
+      if (!online) {
+        appendOfflineCoachExchange(t);
+        return;
+      }
+      void sendMessage({ text: t });
+    },
+    [appendOfflineCoachExchange, online, sendMessage]
+  );
 
   function cancelEditUserMessage() {
     setEditingUserId(null);
@@ -653,9 +813,13 @@ export function CoachChat({
   }
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
+    const el = scrollRef.current;
+    if (!el) return;
+    const streaming =
+      status === "streaming" || status === "submitted";
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: streaming ? "auto" : "smooth",
     });
   }, [messages, status]);
 
@@ -693,27 +857,6 @@ export function CoachChat({
     if (e.nativeEvent.isComposing) return;
     e.preventDefault();
     void submitComposer();
-  }
-
-  function sendQuick(text: string) {
-    const t = text.trim();
-    if (!t) return;
-    // Do not gate on `busy`: the model often streams `suggest_quick_replies` last; the overall
-    // request can still be "streaming" while chips are already actionable. useChat accepts a new
-    // send while the prior stream is winding down.
-    if (messages.length === 0) {
-      setEmptyQuickDismissed(true);
-    } else {
-      const aid = lastAssistantMessageId(messages);
-      if (aid) {
-        setDismissedQuickByAssistantId((d) => ({ ...d, [aid]: true }));
-      }
-    }
-    if (!online) {
-      appendOfflineCoachExchange(t);
-      return;
-    }
-    void sendMessage({ text: t });
   }
 
   return (
@@ -850,70 +993,53 @@ export function CoachChat({
             ) : null}
           </div>
         ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={cn(
-                "flex",
-                m.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              {m.role === "user" ? (
-                <div className="flex max-w-[90%] flex-col items-end gap-1.5">
-                  <p
-                    className={cn(
-                      "bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 font-medium whitespace-pre-wrap",
-                      editingUserId === m.id &&
-                        "ring-primary/60 ring-2 ring-offset-2 ring-offset-background"
-                    )}
-                  >
-                    {textFromParts(m)}
-                  </p>
-                  {editingUserId === m.id ? (
-                    <p className="text-muted-foreground max-w-full text-right text-[0.65rem] leading-snug">
-                      Editing in the message box below. Saving removes
-                      everything after this message.
-                    </p>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground h-8 touch-manipulation gap-1 px-2 text-xs"
-                      disabled={busy}
-                      title="Edit message; removes replies after it"
-                      onClick={() => beginEditUserMessage(m)}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-              ) : (
+          <>
+            {messages.map((m) => (
+              <CoachMessageRow
+                key={m.id}
+                message={m}
+                editingUserId={editingUserId}
+                busy={busy}
+                online={online}
+                dismissedQuickReplies={
+                  dismissedQuickByAssistantId[m.id] === true
+                }
+                streamThrottledMarkdown={
+                  (status === "streaming" || status === "submitted") &&
+                  m.role === "assistant" &&
+                  m.id === lastAssistantId
+                }
+                onBeginEditUser={beginEditUserMessage}
+                onQuickReply={sendQuick}
+                onRegenerateAssistant={regenerateAssistantById}
+                showAssistantTokenUsage={coachAiDebugUi}
+              />
+            ))}
+            {showRetryPendingUserReply ? (
+              <div className="flex justify-end">
                 <div
-                  className={cn(
-                    "max-w-[95%] space-y-2 rounded-2xl border px-4 py-3",
-                    isOfflineCoachNotice(m)
-                      ? "border-amber-500/45 bg-amber-500/10"
-                      : "bg-muted/40 border-border/60"
-                  )}
+                  className="border-border bg-muted/30 text-muted-foreground flex max-w-[min(100%,20rem)] flex-col gap-2 rounded-2xl border border-dashed px-3 py-2.5 text-xs"
+                  role="status"
                 >
-                  <AssistantMessageParts
-                    message={m}
-                    dismissedQuickReplies={
-                      dismissedQuickByAssistantId[m.id] === true
-                    }
-                    onQuickReply={sendQuick}
-                    onRegenerate={() => void regenerate({ messageId: m.id })}
-                    busy={busy}
-                    online={online}
-                    showRegenerateAndTokenRow
-                    showOfflineStyling
-                  />
+                  <span>
+                    No coach reply yet. You can resend your last message to try
+                    again.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="touch-manipulation gap-1.5 self-end"
+                    disabled={!online}
+                    onClick={() => void retryPendingAssistantReply()}
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden />
+                    Retry
+                  </Button>
                 </div>
-              )}
-            </div>
-          ))
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -942,7 +1068,7 @@ export function CoachChat({
           >
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-destructive text-sm">
-                {isCoachAiDebugUiEnabled() && error.message.trim()
+                {coachAiDebugUi && error.message.trim()
                   ? error.message
                   : "Something went wrong."}
               </p>
@@ -957,7 +1083,7 @@ export function CoachChat({
                 Retry
               </Button>
             </div>
-            {isCoachAiDebugUiEnabled() &&
+            {coachAiDebugUi &&
             error.message.trim() === "Something went wrong." ? (
               <p className="text-muted-foreground text-[0.65rem] leading-snug">
                 Response body is still generic. Set{" "}
@@ -968,7 +1094,7 @@ export function CoachChat({
                 can return detailed errors.
               </p>
             ) : null}
-            {isCoachAiDebugUiEnabled() && error.stack ? (
+            {coachAiDebugUi && error.stack ? (
               <details className="group border-border/80 bg-muted/30 rounded-lg border">
                 <summary className="text-muted-foreground cursor-pointer px-3 py-2 text-xs font-medium marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="underline-offset-2 group-open:underline">
@@ -1102,13 +1228,15 @@ export function CoachChat({
         </form>
       </div>
 
-      <CoachContextInspector
-        open={contextInspectorOpen}
-        onOpenChange={setContextInspectorOpen}
-        payload={contextPreview}
-        loading={contextPreviewLoading}
-        error={contextPreviewError}
-      />
+      {coachAiDebugUi ? (
+        <CoachContextInspector
+          open={contextInspectorOpen}
+          onOpenChange={setContextInspectorOpen}
+          payload={contextPreview}
+          loading={contextPreviewLoading}
+          error={contextPreviewError}
+        />
+      ) : null}
     </div>
   );
 }

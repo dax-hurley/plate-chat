@@ -4,9 +4,17 @@ import Markdown, {
   defaultUrlTransform,
   type Components,
 } from "react-markdown";
+import { memo } from "react";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
+
+const REMARK_PLUGINS = [remarkGfm];
+
+function assistantMarkdownUrlTransform(url: string) {
+  if (/^(javascript|data|vbscript):/i.test(url)) return "";
+  return defaultUrlTransform(url);
+}
 
 export const markdownComponents: Components = {
   p: ({ children, className, ...props }) => (
@@ -197,21 +205,25 @@ type AssistantMarkdownProps = {
   className?: string;
 };
 
-export function AssistantMarkdown({ content, className }: AssistantMarkdownProps) {
+function AssistantMarkdownImpl({ content, className }: AssistantMarkdownProps) {
   if (!content.trim()) return null;
 
   return (
     <div className={cn("assistant-md min-w-0 break-words", className)}>
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         components={markdownComponents}
-        urlTransform={(url) => {
-          if (/^(javascript|data|vbscript):/i.test(url)) return "";
-          return defaultUrlTransform(url);
-        }}
+        urlTransform={assistantMarkdownUrlTransform}
       >
         {content}
       </Markdown>
     </div>
   );
 }
+
+/** Skips react-markdown + GFM when `content` is unchanged (helps older chat rows during streaming). */
+export const AssistantMarkdown = memo(
+  AssistantMarkdownImpl,
+  (prev, next) =>
+    prev.content === next.content && prev.className === next.className
+);

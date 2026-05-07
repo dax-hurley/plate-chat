@@ -421,6 +421,115 @@ export async function updateWorkoutTemplate(
   return next;
 }
 
+type ExerciseRowForTemplateLine = {
+  id: string;
+  logKind: string | null;
+  defaultDurationSec: number | null;
+  defaultDistance: number | null;
+  distanceUnit: string | null;
+  trackWeight: boolean;
+};
+
+type TemplateLineInput = {
+  exerciseId: string;
+  targetSets?: number;
+  targetReps?: number;
+  targetDurationSec?: number | null;
+  targetDistance?: number | null;
+  defaultWeight?: number | null;
+  weightUnit?: "lb" | "kg" | string | null;
+  progressiveOverloadEnabled?: boolean;
+  progressiveOverloadIncrement?: number | null;
+  progressiveOverloadRequireFullCompletion?: boolean;
+  trackWeight?: boolean;
+  logTimeForDistanceSets?: boolean;
+  isWarmup?: boolean;
+  restBetweenSetsSec?: number | null;
+};
+
+function buildWorkoutTemplateItemRowValues(
+  userId: string,
+  templateId: string,
+  order: number,
+  ex: ExerciseRowForTemplateLine,
+  input: TemplateLineInput
+) {
+  const lk = parseExerciseLogKind(ex.logKind);
+  const isTime = lk === "time";
+  const isDistance = lk === "distance";
+  const logTimeFD = isDistance && Boolean(input.logTimeForDistanceSets);
+  const dUnit = parseDistanceUnit(ex.distanceUnit);
+  const targetReps =
+    isTime || isDistance ? null : Math.max(1, Math.round(input.targetReps ?? 5));
+  const targetDurationSec =
+    isTime
+      ? Math.max(
+          1,
+          Math.round(
+            input.targetDurationSec ?? ex.defaultDurationSec ?? 60
+          )
+        )
+      : isDistance && logTimeFD
+        ? Math.max(
+            1,
+            Math.round(
+              input.targetDurationSec ?? ex.defaultDurationSec ?? 60
+            )
+          )
+        : null;
+  const targetDistance =
+    isDistance && !logTimeFD
+      ? roundDistance(
+          Math.max(
+            minPositiveDistance(dUnit),
+            Number(
+              input.targetDistance ??
+                ex.defaultDistance ??
+                (dUnit === "m" ? 400 : 1)
+            )
+          ),
+          dUnit
+        )
+      : null;
+  const itemWeightUnit =
+    input.weightUnit === undefined
+      ? null
+      : input.weightUnit === null || String(input.weightUnit).trim() === ""
+        ? null
+        : parseWeightUnit(String(input.weightUnit));
+  const lineTrackWeight =
+    input.trackWeight !== undefined
+      ? Boolean(input.trackWeight)
+      : ex.trackWeight;
+
+  return {
+    userId,
+    templateId,
+    exerciseId: input.exerciseId,
+    order,
+    targetSets: input.targetSets ?? 3,
+    targetReps,
+    targetDurationSec,
+    targetDistance,
+    defaultWeight: input.defaultWeight ?? null,
+    weightUnit: itemWeightUnit,
+    trackWeight: lineTrackWeight,
+    progressiveOverloadEnabled: input.progressiveOverloadEnabled ?? false,
+    progressiveOverloadIncrement:
+      input.progressiveOverloadIncrement === undefined
+        ? null
+        : input.progressiveOverloadIncrement === null ||
+            !Number.isFinite(input.progressiveOverloadIncrement)
+          ? null
+          : Number(input.progressiveOverloadIncrement),
+    progressiveOverloadRequireFullCompletion:
+      input.progressiveOverloadRequireFullCompletion ?? false,
+    logTimeForDistanceSets: logTimeFD,
+    isWarmup: input.isWarmup ?? false,
+    restBetweenSetsSec: normalizeRestBetweenSetsSec(input.restBetweenSetsSec),
+  };
+}
+
 export async function addTemplateItem(
   userId: string,
   input: {
@@ -456,87 +565,17 @@ export async function addTemplateItem(
     ),
   });
   if (!ex) throw new Error("Exercise not found");
-  const lk = parseExerciseLogKind(ex.logKind);
-  const isTime = lk === "time";
-  const isDistance = lk === "distance";
-  const logTimeFD = isDistance && Boolean(input.logTimeForDistanceSets);
-  const dUnit = parseDistanceUnit(ex.distanceUnit);
-  const targetReps = isTime || isDistance
-    ? null
-    : Math.max(1, Math.round(input.targetReps ?? 5));
-  const targetDurationSec =
-    isTime
-      ? Math.max(
-          1,
-          Math.round(
-            input.targetDurationSec ??
-              ex.defaultDurationSec ??
-              60
-          )
-        )
-      : isDistance && logTimeFD
-        ? Math.max(
-            1,
-            Math.round(
-              input.targetDurationSec ??
-                ex.defaultDurationSec ??
-                60
-            )
-          )
-        : null;
-  const targetDistance =
-    isDistance && !logTimeFD
-      ? roundDistance(
-          Math.max(
-            minPositiveDistance(dUnit),
-            Number(
-              input.targetDistance ??
-                ex.defaultDistance ??
-                (dUnit === "m" ? 400 : 1)
-            )
-          ),
-          dUnit
-        )
-      : null;
-  const itemWeightUnit =
-    input.weightUnit === undefined
-      ? null
-      : input.weightUnit === null || String(input.weightUnit).trim() === ""
-        ? null
-        : parseWeightUnit(String(input.weightUnit));
-  const lineTrackWeight =
-    input.trackWeight !== undefined ? Boolean(input.trackWeight) : ex.trackWeight;
   const [row] = await db
     .insert(workoutTemplateItems)
-    .values({
-      userId,
-      templateId: input.templateId,
-      exerciseId: input.exerciseId,
-      order: input.order,
-      targetSets: input.targetSets ?? 3,
-      targetReps,
-      targetDurationSec,
-      targetDistance,
-      defaultWeight: input.defaultWeight ?? null,
-      weightUnit: itemWeightUnit,
-      trackWeight: lineTrackWeight,
-      progressiveOverloadEnabled:
-        input.progressiveOverloadEnabled ?? false,
-      progressiveOverloadIncrement:
-        input.progressiveOverloadIncrement === undefined
-          ? null
-          : input.progressiveOverloadIncrement === null ||
-              !Number.isFinite(input.progressiveOverloadIncrement)
-            ? null
-            : Number(input.progressiveOverloadIncrement),
-      progressiveOverloadRequireFullCompletion:
-        input.progressiveOverloadRequireFullCompletion ?? false,
-      logTimeForDistanceSets: logTimeFD,
-      isWarmup: input.isWarmup ?? false,
-      restBetweenSetsSec: normalizeRestBetweenSetsSec(
-        input.restBetweenSetsSec
-      ),
-    })
+    .values(
+      buildWorkoutTemplateItemRowValues(
+        userId,
+        input.templateId,
+        input.order,
+        ex,
+        input
+      )
+    )
     .returning();
   return row;
 }
@@ -608,29 +647,39 @@ export async function appendTemplateItemsBulk(
   }>
 ) {
   const tid = templateId.trim();
-  const out: Awaited<ReturnType<typeof appendTemplateItem>>[] = [];
-  for (const i of items) {
-    const row = await appendTemplateItem(userId, {
-      templateId: tid,
-      exerciseId: i.exerciseId.trim(),
-      targetSets: i.targetSets,
-      targetReps: i.targetReps,
-      targetDurationSec: i.targetDurationSec,
-      targetDistance: i.targetDistance,
-      defaultWeight: i.defaultWeight,
-      weightUnit: i.weightUnit,
-      progressiveOverloadEnabled: i.progressiveOverloadEnabled,
-      progressiveOverloadIncrement: i.progressiveOverloadIncrement,
-      progressiveOverloadRequireFullCompletion:
-        i.progressiveOverloadRequireFullCompletion,
-      trackWeight: i.trackWeight,
-      logTimeForDistanceSets: i.logTimeForDistanceSets,
-      isWarmup: i.isWarmup,
-      restBetweenSetsSec: i.restBetweenSetsSec,
-    });
-    out.push(row);
+  if (items.length === 0) return [];
+
+  const t = await getTemplate(userId, tid);
+  if (!t) throw new Error("Workout template not found");
+
+  const ids = [...new Set(items.map((i) => i.exerciseId.trim()))];
+  const exRows = await db.query.exercises.findMany({
+    where: and(
+      inArray(exercises.id, ids),
+      or(eq(exercises.userId, userId), isNull(exercises.userId))
+    ),
+  });
+  const exById = new Map(exRows.map((e) => [e.id, e]));
+  for (const id of ids) {
+    if (!exById.has(id)) throw new Error("Exercise not found");
   }
-  return out;
+
+  let nextOrder = t.items.reduce((m, i) => Math.max(m, i.order), -1) + 1;
+  const values = items.map((i) => {
+    const eid = i.exerciseId.trim();
+    const ex = exById.get(eid)!;
+    const row = buildWorkoutTemplateItemRowValues(
+      userId,
+      tid,
+      nextOrder,
+      ex,
+      { ...i, exerciseId: eid }
+    );
+    nextOrder += 1;
+    return row;
+  });
+
+  return db.insert(workoutTemplateItems).values(values).returning();
 }
 
 export async function deleteTemplateItem(

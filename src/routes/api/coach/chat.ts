@@ -82,7 +82,7 @@ async function handlePost({ request }: { request: Request }): Promise<Response> 
       system,
       messages: modelMessages,
       tools,
-      stopWhen: stepCountIs(24),
+      stopWhen: stepCountIs(12),
     });
 
     const coachDebug = isCoachAiDebugEnabled();

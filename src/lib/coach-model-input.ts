@@ -5,6 +5,7 @@ import {
   type UIMessage,
 } from "ai";
 
+import { ANTHROPIC_EPHEMERAL_SYSTEM_CACHE } from "@/lib/anthropic-prompt-cache";
 import { formatProfileForCoachPrompt } from "@/lib/coach-profile-context";
 import { repairSuggestQuickRepliesToolInputs } from "@/lib/coach-quick-reply-sanitize";
 import {
@@ -13,11 +14,6 @@ import {
 } from "@/prompts/coach-system-prompt";
 import { createCoachTools } from "@/lib/coach-tools";
 import * as profile from "@/lib/services/profile";
-
-const COACH_CACHED_SYSTEM_PROVIDER_OPTIONS: SystemModelMessage["providerOptions"] =
-  {
-    anthropic: { cacheControl: { type: "ephemeral" } },
-  };
 
 /**
  * Tool parts in these states have no `tool_result` in the model transcript (see
@@ -82,15 +78,21 @@ export async function getCoachModelInput(userId: string, messages: UIMessage[]) 
     }
   );
   const profileBundle = await profile.getProfileForUser(userId);
-  const system: [SystemModelMessage, SystemModelMessage] = [
+  /** Stable per request except profile edits — second cache tier after global prefix. */
+  const system: [SystemModelMessage, SystemModelMessage, SystemModelMessage] = [
     {
       role: "system",
       content: getCoachCachableSystemPrefix(),
-      providerOptions: COACH_CACHED_SYSTEM_PROVIDER_OPTIONS,
+      providerOptions: ANTHROPIC_EPHEMERAL_SYSTEM_CACHE,
     },
     {
       role: "system",
-      content: `${getCoachSystemDateLine()}\n\n${formatProfileForCoachPrompt(profileBundle)}`,
+      content: formatProfileForCoachPrompt(profileBundle),
+      providerOptions: ANTHROPIC_EPHEMERAL_SYSTEM_CACHE,
+    },
+    {
+      role: "system",
+      content: getCoachSystemDateLine(),
     },
   ];
   const systemForDebug = flattenCoachSystemForDebug(system);

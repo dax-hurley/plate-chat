@@ -1,19 +1,24 @@
-import {
-  TRAINLOG_TOOL_DEFINITIONS,
-  type TrainlogToolName,
-} from "@/lib/trainlog-tools/definitions";
+import { getCoachAgentDataToolNamesSorted } from "@/lib/coach-agent/tool-names";
 
-const TRAINLOG_UI_BY_NAME = Object.fromEntries(
-  TRAINLOG_TOOL_DEFINITIONS.map((d) => [
-    d.name,
-    { completionText: d.completionText, errorText: d.errorText },
+const COACH_DATA_UI = Object.fromEntries(
+  getCoachAgentDataToolNamesSorted().map((name) => [
+    name,
+    {
+      completionText: humanizeDone(name),
+      errorText: `${humanize(name)} failed`,
+    },
   ])
-) as Record<
-  TrainlogToolName,
-  { completionText: string; errorText: string }
->;
+) as Record<string, { completionText: string; errorText: string }>;
 
-/** Coach-only tools (not in `TRAINLOG_TOOL_DEFINITIONS`). */
+function humanize(name: string) {
+  return name.replace(/^coach_/, "").replace(/_/g, " ");
+}
+
+function humanizeDone(name: string) {
+  const h = humanize(name);
+  return h.charAt(0).toUpperCase() + h.slice(1) + " done";
+}
+
 const EXTRA_COACH_TOOL_UI: Record<
   string,
   { completionText: string; errorText: string }
@@ -22,19 +27,11 @@ const EXTRA_COACH_TOOL_UI: Record<
     completionText: "Prepared quick replies",
     errorText: "Couldn't prepare quick replies",
   },
-  tool_search_tool_bm25: {
-    completionText: "Searched tools",
-    errorText: "Couldn't search tools",
-  },
   onboarding_meal_refinement_complete: {
     completionText: "Continuing setup",
     errorText: "Couldn't continue",
   },
 };
-
-function humanizeToolName(name: string) {
-  return name.replace(/_/g, " ");
-}
 
 export type CoachToolUiCopy = {
   completionText: string;
@@ -45,11 +42,11 @@ export type CoachToolUiCopy = {
  * User-facing strings for the coach chat tool-call footer (success vs failure).
  */
 export function getCoachToolUiCopy(toolName: string): CoachToolUiCopy {
-  const trainlog = TRAINLOG_UI_BY_NAME[toolName as TrainlogToolName];
-  if (trainlog) return trainlog;
+  const data = COACH_DATA_UI[toolName];
+  if (data) return data;
   const extra = EXTRA_COACH_TOOL_UI[toolName];
   if (extra) return extra;
-  const label = humanizeToolName(toolName);
+  const label = toolName.replace(/_/g, " ");
   return {
     completionText: `${label} finished`,
     errorText: `${label} failed`,

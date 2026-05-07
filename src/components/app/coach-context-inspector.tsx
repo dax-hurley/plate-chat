@@ -78,13 +78,10 @@ export function CoachContextInspector({
           <DialogTitle>Next request context</DialogTitle>
           <DialogDescription>
             System prompt, model messages, and tool definitions (schemas + descriptions)
-            for your next send. Deferred data tools are registered with the API but
-            are omitted from the initial context prefix until discovered via{" "}
-            <code className="text-foreground/90">tool_search_tool_bm25</code> — API{" "}
-            <code className="text-foreground/90">input_tokens</code> can stay high on
-            later turns because expanded tools and tool results live in message history.
-            Prefix vs deferred counts are recomputed on the client from tool names when the
-            preview API omits those fields.
+            for your next send. Approximate &quot;immediate&quot; vs &quot;deferred&quot; tool
+            sizes are computed for debug when the preview payload omits those stats (coach data
+            tools vs quick-reply UI tools). Tool results in message history grow token usage on
+            later turns.
             {displayPayload?.modelId ? (
               <span className="text-muted-foreground mt-2 block font-mono text-[0.7rem]">
                 Model: {displayPayload.modelId}

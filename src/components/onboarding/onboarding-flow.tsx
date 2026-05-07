@@ -580,6 +580,7 @@ function OnboardingMealRefinementPanel({
                         online={online}
                         showRegenerateAndTokenRow={false}
                         showOfflineStyling={false}
+                        streamThrottledMarkdown={busy && isLastAssistant}
                       />
                     </div>
                   </div>

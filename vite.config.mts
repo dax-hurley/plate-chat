@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
@@ -15,11 +15,18 @@ const capacitorWebPublicDir = path.resolve(__dirname, ".output/public");
 const capacitorWeb =
   process.env.CAPACITOR_WEB_BUILD === "1" || process.env.CAPACITOR_WEB_BUILD === "true";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  /** Browser can't read `COACH_AI_DEBUG`; pass through for `isCoachAiDebugUiEnabled` (see `coach-ai-debug.ts`). */
+  const coachAiDebugClient =
+    env.VITE_COACH_AI_DEBUG ?? env.COACH_AI_DEBUG ?? "";
+
+  return {
   define: {
     "process.env.PLATECHAT_CAPACITOR_WEB_BUILD": JSON.stringify(
       capacitorWeb ? "1" : "",
     ),
+    __COACH_AI_DEBUG_CLIENT__: JSON.stringify(coachAiDebugClient),
   },
   server: {
     port: 3001,
@@ -103,4 +110,5 @@ export default defineConfig({
       },
     }),
   ],
+  };
 });

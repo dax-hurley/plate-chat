@@ -1,17 +1,15 @@
-import { getTrainlogToolNamesSorted } from "@/lib/coach-tool-catalog";
+import { getCoachAgentDataToolNamesSorted } from "@/lib/coach-agent/tool-names";
 
-/** Tools that stay in the Anthropic prefix (not deferred). Must match `createCoachTools`. */
+/** Tools that stay in the Anthropic prefix (heuristic for debug UI). */
 const IMMEDIATE_TOOL_NAMES = new Set([
-  "tool_search_tool_bm25",
   "suggest_quick_replies",
+  "onboarding_meal_refinement_complete",
 ]);
 
 export type CoachContextPreviewPayload = {
   system?: string;
   modelMessages?: unknown;
-  /** Tool names, descriptions, and input JSON Schemas — billed separately from `modelMessages`. */
   toolDefinitions?: unknown;
-  /** Server may omit newer fields after deploy; UI tolerates partial stats. */
   contextStats?: {
     systemChars?: number;
     modelMessagesChars?: number;
@@ -38,7 +36,7 @@ export function enrichCoachContextPreviewPayload(
   const defs = payload.toolDefinitions;
   if (!Array.isArray(defs)) return payload;
 
-  const trainlog = new Set(getTrainlogToolNamesSorted());
+  const dataTools = new Set(getCoachAgentDataToolNamesSorted());
   const namedDefs = defs.filter(
     (d): d is { name: string } =>
       d != null &&
@@ -47,13 +45,13 @@ export function enrichCoachContextPreviewPayload(
   );
 
   const prefixDefs = namedDefs.filter((d) => IMMEDIATE_TOOL_NAMES.has(d.name));
-  const deferredDefs = namedDefs.filter((d) => trainlog.has(d.name));
+  const deferredDefs = namedDefs.filter((d) => dataTools.has(d.name));
   const prefixToolsChars = JSON.stringify(prefixDefs).length;
   const deferredCatalogChars = JSON.stringify(deferredDefs).length;
   const immediateSorted = [...IMMEDIATE_TOOL_NAMES].sort((a, b) =>
     a.localeCompare(b)
   );
-  const deferredSorted = getTrainlogToolNamesSorted();
+  const deferredSorted = getCoachAgentDataToolNamesSorted();
 
   const raw = payload.contextStats;
   const systemChars = raw?.systemChars ?? 0;

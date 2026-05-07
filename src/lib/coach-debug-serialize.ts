@@ -28,7 +28,7 @@ export type CoachToolDefinitionDebug = {
 
 /**
  * Which tools Anthropic loads in the initial prefix vs deferred (schemas omitted until search / reference).
- * Provider tools (e.g. `tool_search_tool_bm25`) are always immediate.
+ * Provider-native tools (`type === "provider"`) or tools without deferLoading count as immediate.
  */
 export function summarizeCoachToolDeferFlags(tools: ToolSet): {
   immediateToolNames: string[];

@@ -2,6 +2,7 @@ import { getToolName, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import { ChevronRight, RefreshCw, WifiOff } from "lucide-react";
 
 import { AssistantMarkdown } from "@/components/assistant-markdown";
+import { committedAssistantMarkdownPrefixLen } from "@/lib/streaming-markdown-split";
 import { Button } from "@/components/ui/button";
 import { getCoachToolUiCopy } from "@/lib/coach-tool-ui";
 import { splitLeadingEmoji } from "@/lib/quick-reply-split";
@@ -229,6 +230,40 @@ function textFromPartsForOffline(message: UIMessage) {
 export const OFFLINE_COACH_REPLY =
   "You're offline, so this message didn't reach the coach. Reconnect to the internet and send again if you want a reply.";
 
+/**
+ * While the model streams, only the committed prefix (paragraph boundaries
+ * outside code fences) is parsed with react-markdown + GFM; the tail is plain
+ * text so we avoid re-parsing the full growing document on every token.
+ * When the stream finishes, the full string is parsed as markdown once.
+ */
+function ThrottledAssistantMarkdown({
+  content,
+  active,
+}: {
+  content: string;
+  /** When true, use incremental markdown + plaintext tail (streaming). */
+  active: boolean;
+}) {
+  if (!active) {
+    return <AssistantMarkdown content={content} />;
+  }
+
+  const split = committedAssistantMarkdownPrefixLen(content);
+  const head = content.slice(0, split);
+  const tail = content.slice(split);
+
+  return (
+    <>
+      {head.trim() ? <AssistantMarkdown content={head} /> : null}
+      {tail.length > 0 ? (
+        <span className="text-foreground block text-[0.9375rem] leading-relaxed whitespace-pre-wrap break-words">
+          {tail}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 export function isOfflineCoachNotice(m: UIMessage): boolean {
   return m.role === "assistant" && textFromPartsForOffline(m) === OFFLINE_COACH_REPLY;
 }
@@ -242,8 +277,12 @@ export type AssistantMessagePartsProps = {
   online: boolean;
   /** When false, omit bottom Regenerate and token debug (e.g. onboarding). */
   showRegenerateAndTokenRow?: boolean;
+  /** When true, show per-reply provider token counts (requires debug / metadata). */
+  showAssistantTokenUsage?: boolean;
   /** When false, never show the offline sub-label (e.g. onboarding). */
   showOfflineStyling?: boolean;
+  /** When true, render streaming text with incremental markdown (prefix only) + plain tail. */
+  streamThrottledMarkdown?: boolean;
 };
 
 /**
@@ -259,6 +298,8 @@ export function AssistantMessageParts({
   online,
   showRegenerateAndTokenRow = true,
   showOfflineStyling = true,
+  streamThrottledMarkdown = false,
+  showAssistantTokenUsage = false,
 }: AssistantMessagePartsProps) {
   const m = message;
   if (m.role !== "assistant" || m.parts == null) return null;
@@ -272,7 +313,15 @@ export function AssistantMessageParts({
       ) : null}
       {groupForDisplay(mergeAssistantParts(m.parts)).map((seg, i) => {
         if (seg.kind === "text") {
-          return <AssistantMarkdown key={i} content={seg.text} />;
+          return streamThrottledMarkdown ? (
+            <ThrottledAssistantMarkdown
+              key={`t-${i}`}
+              content={seg.text}
+              active={streamThrottledMarkdown}
+            />
+          ) : (
+            <AssistantMarkdown key={`t-${i}`} content={seg.text} />
+          );
         }
         if (seg.kind === "quickReplies") {
           if (dismissedQuickReplies) return null;
@@ -429,9 +478,10 @@ export function AssistantMessageParts({
       })}
       {showRegenerateAndTokenRow ? (() => {
         const u = coachAiUsageFromMessage(m);
+        const showTokens = showAssistantTokenUsage && u;
         return (
           <>
-            {u ? (
+            {showTokens ? (
               <p
                 className="text-muted-foreground font-mono text-[0.65rem] leading-snug"
                 title="Token counts from the model provider (aggregated across tool steps for this reply)"

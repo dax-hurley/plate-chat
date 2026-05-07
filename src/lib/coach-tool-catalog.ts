@@ -1,20 +1,18 @@
 import { APP_BRAND_NAME } from "@/lib/brand";
-import { TRAINLOG_TOOL_DEFINITIONS } from "@/lib/trainlog-tools/definitions";
+import { getCoachAgentDataToolNamesSorted } from "@/lib/coach-agent/tool-names";
 
-/** Every data tool name, sorted (for system prompt overview). */
-export function getTrainlogToolNamesSorted(): string[] {
-  return TRAINLOG_TOOL_DEFINITIONS.map((d) => d.name).sort((a, b) =>
-    a.localeCompare(b)
-  );
+/** Every coach data tool name, sorted (for system prompt overview). */
+export function getCoachAgentToolNamesSorted(): string[] {
+  return getCoachAgentDataToolNamesSorted();
 }
 
 /**
- * Short system section: tool names only. Full argument schemas are supplied to the model with each request.
+ * Short system section: tool names only. Full argument schemas are supplied with each request.
  */
 export function getCoachToolCatalogSystemSection(): string {
-  const names = getTrainlogToolNamesSorted();
+  const names = getCoachAgentToolNamesSorted();
   return [
-    `Tool catalog: call ${APP_BRAND_NAME} data tools by name when you need them (see names below). Prefer the right tool rather than guessing.`,
-    `${APP_BRAND_NAME} data tool names: ${names.join(", ")}.`,
+    `Tool catalog: call ${APP_BRAND_NAME} coach tools by name when you need them (see names below). Prefer the fewest calls—batch with coach_apply_weekly_meal_plan and coach_apply_workout_program when building full weeks or programs.`,
+    `${APP_BRAND_NAME} coach data tool names: ${names.join(", ")}.`,
   ].join("\n\n");
 }

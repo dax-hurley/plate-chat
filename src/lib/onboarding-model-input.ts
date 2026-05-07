@@ -1,35 +1,32 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import {
   convertToModelMessages,
   isToolUIPart,
+  type SystemModelMessage,
   type ToolSet,
   type UIMessage,
 } from "ai";
 
 import {
   buildMealPlanRefinementContextAddendum,
-  buildOnboardingContextBlock,
+  buildOnboardingCachableStem,
 } from "@/prompts/onboarding-system-prompt";
 import { getCoachSystemDateLine } from "@/prompts/coach-system-prompt";
+import { ANTHROPIC_EPHEMERAL_SYSTEM_CACHE } from "@/lib/anthropic-prompt-cache";
+import { formatProfileForCoachPrompt } from "@/lib/coach-profile-context";
+import { createCoachAgentTools } from "@/lib/coach-agent/tools";
 import { repairSuggestQuickRepliesToolInputs } from "@/lib/coach-quick-reply-sanitize";
 import {
   onboardingMealRefinementCompleteTool,
   suggestQuickRepliesTool,
 } from "@/lib/coach-ui-only-tools";
-import { createSharedTrainlogTools } from "@/lib/trainlog-tools/coach-adapter";
 import * as profile from "@/lib/services/profile";
 
-/**
- * Anthropic requires at least one non-deferred tool. Coach uses the same BM25
- * tool so deferred data tools can be discovered by reference.
- */
 function createOnboardingTools(
   userId: string,
   options?: { mealPlanRefinement?: boolean }
 ): ToolSet {
   const base: ToolSet = {
-    tool_search_tool_bm25: anthropic.tools.toolSearchBm25_20251119(),
-    ...createSharedTrainlogTools(userId),
+    ...createCoachAgentTools(userId),
   };
   if (options?.mealPlanRefinement) {
     return {
@@ -48,9 +45,7 @@ const TOOL_STATES_OMITTED_FROM_MODEL: ReadonlySet<string> = new Set([
   "approval-responded",
 ]);
 
-function dropUnusableOnboardingToolParts(
-  messages: UIMessage[]
-): UIMessage[] {
+function dropUnusableOnboardingToolParts(messages: UIMessage[]): UIMessage[] {
   return messages
     .map((m) => {
       if (m.role !== "assistant" || m.parts == null || m.parts.length === 0) {
@@ -71,8 +66,8 @@ function dropUnusableOnboardingToolParts(
 
 /**
  * System + model messages for the onboarding AI (meal plan or workout), using
- * the same data tool registry as the coach. For meal-plan **refinement**, also registers
- * `suggest_quick_replies` and `onboarding_meal_refinement_complete` (UI/flow: advance when the user is done).
+ * the same composite coach tools as main chat. For meal-plan **refinement**, also registers
+ * `suggest_quick_replies` and `onboarding_meal_refinement_complete`.
  */
 export async function getOnboardingModelInput(
   userId: string,
@@ -98,14 +93,28 @@ export async function getOnboardingModelInput(
     }
   );
   const p = await profile.getProfileForUser(userId);
-  const system = [
-    getCoachSystemDateLine(),
-    "",
-    buildOnboardingContextBlock(p, mode, weekStartDayKey),
-    mode === "meal_plan" && options?.mealPlanRefinement
-      ? buildMealPlanRefinementContextAddendum()
-      : "",
-  ].join("\n");
+  const volatileLines = [getCoachSystemDateLine()];
+  if (mode === "meal_plan" && options?.mealPlanRefinement) {
+    volatileLines.push(buildMealPlanRefinementContextAddendum());
+  }
+  const volatileContent = volatileLines.filter((s) => s.length > 0).join("\n\n");
+
+  const system: SystemModelMessage[] = [
+    {
+      role: "system",
+      content: buildOnboardingCachableStem(mode, weekStartDayKey),
+      providerOptions: ANTHROPIC_EPHEMERAL_SYSTEM_CACHE,
+    },
+    {
+      role: "system",
+      content: formatProfileForCoachPrompt(p),
+      providerOptions: ANTHROPIC_EPHEMERAL_SYSTEM_CACHE,
+    },
+    {
+      role: "system",
+      content: volatileContent,
+    },
+  ];
   const modelId =
     process.env["ANTHROPIC_MODEL"]?.trim() || "claude-haiku-4-5";
   return { system, modelMessages, modelId, tools };
