@@ -4,8 +4,8 @@
 #
 # GitHub Environments (Settings → Environments): use the same names as web deploy (`staging`,
 # `prod`). Put **Variables** on each environment, e.g.:
-#   - VITE_API_URL — public HTTPS base the APK should use (CloudFront / app URL). If unset,
-#     the build falls back to http://127.0.0.1:3000 (dry run only, not for real devices).
+#   - VITE_API_URL — public HTTPS base the APK should use (CloudFront / app URL).
+#     Required for release builds (workflow will fail if missing).
 #
 # Environment selection:
 #   - workflow_dispatch: choose **stage** (staging | prod) — same idea as Deploy.
@@ -125,7 +125,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.12.0"
           cache: npm
 
       - name: Set up Java 21
@@ -148,6 +148,22 @@ jobs:
       - name: Prepare local DB path
         run: mkdir -p data
 
+      - name: Validate VITE_API_URL for release builds
+        env:
+          ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VITE_API_URL:-}" ]; then
+            echo "::error::Missing GitHub Environment variable VITE_API_URL for '${ENVIRONMENT}'."
+            echo "::error::Set it under Settings → Environments → ${ENVIRONMENT} → Variables."
+            exit 1
+          fi
+          if [[ "${VITE_API_URL}" == http://127.0.0.1:* || "${VITE_API_URL}" == http://localhost:* ]]; then
+            echo "::error::VITE_API_URL is set to localhost (${VITE_API_URL}). Refusing to build a release APK."
+            exit 1
+          fi
+
       - name: Web build (Capacitor)
         env:
           NODE_OPTIONS: --max-old-space-size=6144
@@ -158,11 +174,11 @@ jobs:
           AUTH_SECRET: ci-placeholder-auth-secret-min-32-chars-long
           BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-32ch-minimum
           DATABASE_URL: file:./data/android-release-build.db
-          AUTH_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
-          APP_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
-          BETTER_AUTH_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
-          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://127.0.0.1:3000' }}
+          AUTH_URL: ${{ vars.VITE_API_URL }}
+          APP_URL: ${{ vars.VITE_API_URL }}
+          BETTER_AUTH_URL: ${{ vars.VITE_API_URL }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: |
           npm run build
           node scripts/ensure-capacitor-index-html.mjs
